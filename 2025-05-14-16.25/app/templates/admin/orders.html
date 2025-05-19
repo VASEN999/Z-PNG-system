@@ -128,7 +128,7 @@
                             {% for order in orders %}
                             <tr class="{{ 'table-info' if order.is_active else '' }}">
                                 <td class="align-middle">
-                                    <span class="order-number">{{ order.order_number }}</span>
+                                    <span class="order-number text-truncate d-block" title="{{ order.order_number }}">{{ order.order_number }}</span>
                                 </td>
                                 <td class="align-middle">
                                     <span class="timestamp">{{ order.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
@@ -159,7 +159,7 @@
                                 </td>
                                 <td class="align-middle">
                                     <div class="note-container">
-                                        <span class="note-text" title="{{ order.note }}">{{ order.note or '-' }}</span>
+                                        <span class="note-text text-truncate d-block" style="max-width: 100%;" title="{{ order.note }}">{{ order.note or '-' }}</span>
                                     </div>
                                 </td>
                                 <td class="align-middle text-center">

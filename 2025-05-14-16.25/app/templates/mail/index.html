@@ -56,7 +56,7 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th>主题</th>
+                                <th style="width: 35%;">主题</th>
                                 <th>发件人</th>
                                 <th>接收时间</th>
                                 <th>附件数</th>
@@ -66,7 +66,11 @@
                         <tbody>
                             {% for email in unprocessed_emails %}
                             <tr>
-                                <td>{{ email.subject }}</td>
+                                <td>
+                                    <div class="text-truncate" style="max-width: 300px;" title="{{ email.subject }}">
+                                        {{ email.subject }}
+                                    </div>
+                                </td>
                                 <td>{{ email.sender }}</td>
                                 <td>{{ email.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                                 <td>{{ email.attachments|length }}</td>
@@ -106,7 +110,7 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th>主题</th>
+                                <th style="width: 35%;">主题</th>
                                 <th>发件人</th>
                                 <th>接收时间</th>
                                 <th>处理人</th>
@@ -117,7 +121,11 @@
                         <tbody>
                             {% for email in processed_emails %}
                             <tr>
-                                <td>{{ email.subject }}</td>
+                                <td>
+                                    <div class="text-truncate" style="max-width: 300px;" title="{{ email.subject }}">
+                                        {{ email.subject }}
+                                    </div>
+                                </td>
                                 <td>{{ email.sender }}</td>
                                 <td>{{ email.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                                 <td>{{ email.processor.username if email.processor else '-' }}</td>

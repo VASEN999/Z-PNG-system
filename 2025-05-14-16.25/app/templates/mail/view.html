@@ -24,6 +24,20 @@
     .attachment-icon {
         font-size: 2rem;
         margin-right: 1rem;
+        flex-shrink: 0;
+    }
+    
+    .attachment-info {
+        overflow: hidden;
+        width: 100%;
+    }
+    
+    .attachment-filename {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+        display: block;
     }
 </style>
 {% endblock %}
@@ -50,7 +64,7 @@
     <div class="col-12 mb-4">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">{{ email.subject }}</h5>
+                <h5 class="mb-0 text-truncate" title="{{ email.subject }}">{{ email.subject }}</h5>
             </div>
             <div class="card-body">
                 <div class="row mb-3">
@@ -119,8 +133,8 @@
                                 <i class="bi bi-file-earmark text-info"></i>
                                 {% endif %}
                             </div>
-                            <div>
-                                <p class="mb-1 fw-bold">{{ attachment.filename }}</p>
+                            <div class="attachment-info">
+                                <p class="mb-1 fw-bold attachment-filename" title="{{ attachment.filename }}">{{ attachment.filename }}</p>
                                 <p class="mb-0 small text-muted">
                                     {{ attachment.file_type|upper }}
                                     {% if attachment.file_size %}
