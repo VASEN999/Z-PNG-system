@@ -1,0 +1,1628 @@
+import os
+import shutil
+import zipfile
+import uuid
+import logging
+import hashlib
+from datetime import datetime
+from flask import render_template, request, redirect, url_for, flash, send_from_directory, jsonify, current_app, send_file
+from werkzeug.utils import secure_filename
+from PIL import Image, ImageDraw, ImageFont
+import fitz  # PyMuPDF
+import docx
+from pptx import Presentation
+import tempfile
+from flask import session
+
+from . import main_bp
+from models import db, UploadedFile, ConvertedFile, Order, AdminUser
+from app import csrf  # 导入从app/__init__.py创建的csrf对象
+from app.admin.routes import login_required  # 导入登录验证装饰器
+
+# 获取日志记录器
+logger = logging.getLogger(__name__)
+
+# 允许的文件类型
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc', 'pptx', 'ppt', 'jpg', 'jpeg', 'png', 'bmp', 'tiff', 'zip', 'rar'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@main_bp.route('/')
+@login_required  # 添加登录验证装饰器
+def index():
+    """主页 - 重定向到活跃订单的详情页面或订单列表页面"""
+    # 获取当前用户ID
+    current_user_id = session.get('admin_id')
+    
+    # 获取当前用户的活跃订单
+    current_order = Order.query.filter_by(is_active=True, user_id=current_user_id).first()
+    
+    # 如果没有活跃订单，重定向到订单列表页面
+    if not current_order:
+        flash('请先选择一个订单或创建新订单进行操作')
+        return redirect(url_for('orders.index'))
+    
+    # 如果有活跃订单，重定向到该订单的详情页
+    return redirect(url_for('orders.view_order', order_number=current_order.order_number))
+
+def clean_orphaned_converted_files():
+    """删除那些没有对应源文件的转换文件"""
+    # 获取当前活跃订单
+    current_order = Order.query.filter_by(is_active=True).first()
+    if not current_order:
+        logger.warning("清理孤立文件：没有活跃订单")
+        return
+        
+    # 从上传目录获取文件列表
+    uploaded_files = os.listdir(current_app.config['UPLOAD_FOLDER'])
+    # 从上传文件中提取基本名称（不含扩展名）
+    uploaded_base_names = [os.path.splitext(f)[0] for f in uploaded_files]
+    
+    # 检查是否有ZIP文件被上传
+    has_zip_files = False
+    for filename in uploaded_files:
+        # 检查是否为ZIP文件
+        if filename.lower().endswith('.zip'):
+            has_zip_files = True
+            break
+        try:
+            with open(os.path.join(current_app.config['UPLOAD_FOLDER'], filename), 'rb') as f:
+                if f.read(4) == b'PK\x03\x04':
+                    has_zip_files = True
+                    break
+        except:
+            pass
+    
+    # 如果有ZIP文件被上传，我们不清理转换文件夹，因为ZIP文件可能解压出多种文件
+    if has_zip_files:
+        logger.info("检测到ZIP文件，跳过孤立文件清理")
+        return
+    
+    # 获取当前活跃订单中的所有转换文件ID列表
+    valid_converted_files_ids = [cf.id for cf in ConvertedFile.query.filter_by(order_id=current_order.id).all()]
+    valid_converted_filenames = [cf.filename for cf in ConvertedFile.query.filter_by(order_id=current_order.id).all()]
+    
+    # 检查每个转换文件，如果在数据库中找不到对应记录或不属于当前订单，则删除
+    for converted_filename in os.listdir(current_app.config['CONVERTED_FOLDER']):
+        file_path = os.path.join(current_app.config['CONVERTED_FOLDER'], converted_filename)
+        
+        # 如果文件不在当前活跃订单的转换文件列表中，则删除
+        if converted_filename not in valid_converted_filenames:
+            # 对于像 filename_page1.png 这样的文件，提取 filename 部分
+            if "_page" in converted_filename or "_slide" in converted_filename:
+                base_name = converted_filename.split('_')[0]
+            else:
+                base_name = os.path.splitext(converted_filename)[0]
+            
+            # 如果是错误信息图片(info_xxx.png)，检查是否已没有相关源文件
+            if base_name.startswith("info_"):
+                keep_file = False
+                # 检查该错误图片是否关联到现有上传文件
+                for uploaded_base in uploaded_base_names:
+                    if uploaded_base in converted_filename:
+                        keep_file = True
+                        break
+                if not keep_file:
+                    if os.path.isfile(file_path):
+                        logger.info(f"删除孤立的错误图片: {converted_filename}")
+                        os.remove(file_path)
+                continue
+            
+            # 检查这个转换文件是否有对应的源文件
+            if base_name not in uploaded_base_names:
+                if os.path.isfile(file_path):
+                    logger.info(f"删除孤立的转换文件: {converted_filename}")
+                    os.remove(file_path)
+
+def calculate_file_hash(file_path):
+    """计算文件的SHA-256哈希值"""
+    try:
+        hasher = hashlib.sha256()
+        with open(file_path, 'rb') as f:
+            # 读取文件块并更新哈希
+            for chunk in iter(lambda: f.read(4096), b''):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+    except Exception as e:
+        logger.error(f"计算文件哈希值时出错: {str(e)}")
+        return None
+
+@main_bp.route('/upload', methods=['POST'])
+@csrf.exempt  # 豁免CSRF保护
+@login_required  # 添加登录验证
+def upload_file():
+    # 记录上传开始时间
+    start_time = datetime.now()
+    
+    # 获取当前用户ID
+    current_user_id = session.get('admin_id')
+    current_user = AdminUser.query.get(current_user_id)
+    
+    # 获取当前用户的活跃订单
+    current_order = Order.query.filter_by(is_active=True, user_id=current_user_id).first()
+    
+    # 如果没有活跃订单，但当前用户是管理员，则检查是否存在其他活跃订单
+    if not current_order and current_user.is_admin:
+        current_order = Order.query.filter_by(is_active=True).first()
+        if current_order:
+            # 分配订单给当前用户，但不修改活跃状态
+            current_order.user_id = current_user_id
+            db.session.commit()
+            logger.info(f"管理员处理文件：将现有活跃订单 #{current_order.order_number} 分配给用户 {current_user_id}")
+    
+    if not current_order:
+        # 检查是否存在其他活跃订单
+        any_active_order = Order.query.filter_by(is_active=True).first()
+        if any_active_order:
+            # 分配订单给当前用户，但不修改活跃状态
+            any_active_order.user_id = current_user_id
+            db.session.commit()
+            current_order = any_active_order
+            logger.info(f"处理文件：将现有活跃订单 #{any_active_order.order_number} 分配给用户 {current_user_id}")
+        else:
+            flash('没有活跃订单，请先上传文件')
+            return redirect(url_for('main.index'))
+    
+    # 检查文件是否存在
+    if 'files[]' not in request.files:
+        flash('没有选择文件，请点击上传区域或上传按钮选择文件')
+        return redirect(url_for('main.index'))
+    
+    files = request.files.getlist('files[]')
+    
+    # 检查是否有有效文件
+    if not files or files[0].filename == '':
+        flash('没有选择文件，请点击上传区域或上传按钮选择文件')
+        return redirect(url_for('main.index'))
+    
+    # 确保存档目录存在
+    uploads_archive = os.path.join(current_app.config['ARCHIVE_FOLDER'], 'uploads', current_order.order_number)
+    converted_archive = os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted', current_order.order_number)
+    os.makedirs(uploads_archive, exist_ok=True)
+    os.makedirs(converted_archive, exist_ok=True)
+    
+    upload_count = 0
+    for file in files:
+        if file and file.filename and allowed_file(file.filename):
+            original_filename = file.filename
+            
+            # 使用安全的文件名，同时支持中文
+            # 先只替换windows文件名不支持的字符，而不是用werkzeug的secure_filename（会去除中文）
+            safe_filename = original_filename
+            for char in r'<>:"/\|?*':
+                safe_filename = safe_filename.replace(char, '_')
+            
+            # 确保文件名唯一
+            base, ext = os.path.splitext(safe_filename)
+            unique_filename = f"{base}_{uuid.uuid4().hex[:8]}{ext}"
+            
+            # 保存到上传目录
+            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
+            file.save(file_path)
+            
+            # 同时保存到订单存档目录
+            archive_path = os.path.join(uploads_archive, unique_filename)
+            try:
+                shutil.copy2(file_path, archive_path)
+                logger.info(f"同时存档上传文件: {unique_filename}, 存档路径: {archive_path}")
+            except Exception as e:
+                logger.error(f"存档上传文件时出错: {unique_filename}, 错误: {str(e)}")
+            
+            # 获取文件大小和类型
+            file_size = os.path.getsize(file_path)
+            file_type = detect_file_type(file_path)
+            
+            # 计算文件哈希值
+            file_hash = calculate_file_hash(file_path)
+            
+            # 创建上传文件记录
+            uploaded_file = UploadedFile(
+                filename=unique_filename,
+                original_filename=original_filename,
+                file_path=archive_path,  # 使用存档路径，这样即使工作目录被清空，还能恢复文件
+                file_size=file_size,
+                file_type=file_type,
+                file_hash=file_hash,
+                order_id=current_order.id
+            )
+            db.session.add(uploaded_file)
+            upload_count += 1
+    
+    if upload_count > 0:
+        db.session.commit()
+        flash(f'成功上传了 {upload_count} 个文件')
+    else:
+        flash('没有上传任何文件，请确保文件类型受支持')
+    
+    # 计算上传所用时间
+    end_time = datetime.now()
+    duration = (end_time - start_time).total_seconds()
+    logger.info(f"文件上传完成，耗时 {duration:.2f} 秒")
+    
+    # 返回到订单详情页面
+    return redirect(url_for('orders.view_order', order_number=current_order.order_number))
+
+@main_bp.route('/process', methods=['POST'])
+@csrf.exempt  # 豁免CSRF保护
+@login_required  # 添加登录验证
+def process_files():
+    logger.info("开始处理文件...")
+    try:
+        # 获取当前用户ID
+        current_user_id = session.get('admin_id')
+        current_user = AdminUser.query.get(current_user_id)
+        
+        # 获取当前用户的活跃订单
+        current_order = Order.query.filter_by(is_active=True, user_id=current_user_id).first()
+        
+        # 如果没有活跃订单，但当前用户是管理员，检查是否存在通过session记录的被激活的订单
+        if not current_order and current_user.is_admin:
+            admin_activated_order_id = session.get('admin_activated_order')
+            if admin_activated_order_id:
+                current_order = Order.query.get(admin_activated_order_id)
+                if current_order:
+                    # 不改变订单活跃状态，只记录使用情况
+                    logger.info(f"管理员处理文件：使用session中记录的订单 #{current_order.order_number}")
+            
+            # 如果仍然没有找到订单，尝试查找任何活跃订单
+            if not current_order:
+                current_order = Order.query.filter_by(is_active=True).first()
+                if current_order:
+                    # 分配订单给当前用户，但不修改活跃状态
+                    current_order.user_id = current_user_id
+                    db.session.commit()
+                    logger.info(f"管理员处理文件：将现有活跃订单 #{current_order.order_number} 分配给用户 {current_user_id}")
+        
+        if not current_order:
+            # 检查是否存在其他活跃订单
+            any_active_order = Order.query.filter_by(is_active=True).first()
+            if any_active_order:
+                # 分配订单给当前用户，但不修改活跃状态
+                any_active_order.user_id = current_user_id
+                db.session.commit()
+                current_order = any_active_order
+                logger.info(f"处理文件：将现有活跃订单 #{any_active_order.order_number} 分配给用户 {current_user_id}")
+            else:
+                flash('没有活跃订单，请先上传文件')
+                return redirect(url_for('main.index'))
+        
+        # 确保存档目录存在
+        uploads_archive = os.path.join(current_app.config['ARCHIVE_FOLDER'], 'uploads', current_order.order_number)
+        converted_archive = os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted', current_order.order_number)
+        os.makedirs(uploads_archive, exist_ok=True)
+        os.makedirs(converted_archive, exist_ok=True)
+        
+        # 不再清空转换文件夹，而是确保所有已有的转换文件都被恢复到转换文件夹
+        # 获取当前订单所有已转换的文件记录
+        existing_converted_files = ConvertedFile.query.filter_by(order_id=current_order.id).all()
+        
+        # 恢复已转换的文件到转换文件夹
+        for converted_file in existing_converted_files:
+            target_path = os.path.join(current_app.config['CONVERTED_FOLDER'], converted_file.filename)
+            # 如果文件不在转换文件夹中，尝试恢复
+            if not os.path.exists(target_path):
+                # 检查原路径是否存在
+                if converted_file.file_path and os.path.exists(converted_file.file_path):
+                    try:
+                        shutil.copy2(converted_file.file_path, target_path)
+                        logger.info(f"恢复已存在的转换文件到工作目录: {converted_file.filename}")
+                    except Exception as e:
+                        logger.error(f"恢复转换文件失败: {converted_file.filename}, 错误: {str(e)}")
+                else:
+                    # 尝试从订单存档目录恢复
+                    archive_path = os.path.join(converted_archive, converted_file.filename)
+                    if os.path.exists(archive_path):
+                        try:
+                            shutil.copy2(archive_path, target_path)
+                            logger.info(f"从存档恢复转换文件到工作目录: {converted_file.filename}")
+                        except Exception as e:
+                            logger.error(f"从存档恢复转换文件失败: {converted_file.filename}, 错误: {str(e)}")
+        
+        # 从数据库获取当前订单中的所有上传文件
+        uploaded_files = UploadedFile.query.filter_by(order_id=current_order.id).all()
+        logger.info(f"当前订单 #{current_order.order_number} 中有 {len(uploaded_files)} 个上传文件记录")
+        
+        # 查找每个上传文件是否已有对应的转换文件
+        unprocessed_files = []
+        for uploaded_file in uploaded_files:
+            needs_processing = False
+            
+            # 计算或获取文件哈希值，作为唯一标识
+            file_hash = uploaded_file.file_hash
+            if not file_hash:
+                # 如果数据库中没有哈希值，尝试计算
+                if uploaded_file.file_path and os.path.exists(uploaded_file.file_path):
+                    file_hash = calculate_file_hash(uploaded_file.file_path)
+                    if file_hash:
+                        # 更新数据库中的哈希值
+                        uploaded_file.file_hash = file_hash
+                        db.session.commit()
+            
+            # 首先检查转换目录中是否有以该文件基本名称开头的任何文件
+            # 这是最直接的检查方式
+            base_name = os.path.splitext(uploaded_file.filename)[0]
+            conversion_exists = False
+            
+            # 直接检查转换文件夹，看是否有与此文件相关的转换文件
+            for filename in os.listdir(current_app.config['CONVERTED_FOLDER']):
+                if filename.startswith(base_name + "_") or filename == base_name + ".png":
+                    conversion_exists = True
+                    logger.info(f"文件 {uploaded_file.filename} 已有转换文件在工作目录: {filename}")
+                    break
+                
+            # 如果转换文件夹中没有相关文件，标记为需要处理
+            if not conversion_exists:
+                needs_processing = True
+                logger.info(f"文件 {uploaded_file.filename} 需要处理: 转换文件夹中无相关文件")
+            else:
+                # 即使找到了文件，仍然检查是否完整
+                # 查询数据库记录
+                converted_records = ConvertedFile.query.filter_by(source_file_id=uploaded_file.id).all()
+                if not converted_records:
+                    # 没有转换记录，但有文件，这是不一致的状态
+                    needs_processing = True
+                    logger.info(f"文件 {uploaded_file.filename} 需要处理: 有转换文件但无数据库记录")
+            
+            # 如果需要处理，添加到待处理列表
+            if needs_processing:
+                # 开始使用增强的文件查找逻辑
+                original_file_found = False
+                file_path = None
+                
+                # 搜索策略1: 检查原始路径
+                if uploaded_file.file_path and os.path.exists(uploaded_file.file_path) and os.path.isfile(uploaded_file.file_path):
+                    file_path = uploaded_file.file_path
+                    original_file_found = True
+                    logger.info(f"在原始路径找到文件: {uploaded_file.filename}")
+                
+                # 搜索策略2: 检查工作目录
+                if not original_file_found:
+                    work_path = os.path.join(current_app.config['UPLOAD_FOLDER'], uploaded_file.filename)
+                    if os.path.exists(work_path) and os.path.isfile(work_path):
+                        file_path = work_path
+                        original_file_found = True
+                        logger.info(f"在工作目录找到文件: {uploaded_file.filename}")
+                
+                # 搜索策略3: 检查当前订单的存档目录
+                if not original_file_found:
+                    archive_path = os.path.join(uploads_archive, uploaded_file.filename)
+                    if os.path.exists(archive_path) and os.path.isfile(archive_path):
+                        try:
+                            # 复制到工作目录
+                            target_path = os.path.join(current_app.config['UPLOAD_FOLDER'], uploaded_file.filename)
+                            shutil.copy2(archive_path, target_path)
+                            file_path = target_path
+                            original_file_found = True
+                            logger.info(f"从当前订单存档恢复文件: {uploaded_file.filename}")
+                        except Exception as e:
+                            logger.error(f"从当前订单存档恢复文件失败: {uploaded_file.filename}, 错误: {str(e)}")
+                
+                # 搜索策略4: 如果是合并订单，检查原始订单
+                if not original_file_found and current_order.is_merged and current_order.merged_from:
+                    try:
+                        source_order_numbers = current_order.merged_from.split(',')
+                        logger.info(f"尝试从原始订单({source_order_numbers})恢复文件: {uploaded_file.filename}")
+                        
+                        for order_number in source_order_numbers:
+                            source_path = os.path.join(current_app.config['ARCHIVE_FOLDER'], 'uploads', order_number, uploaded_file.filename)
+                            if os.path.exists(source_path) and os.path.isfile(source_path):
+                                try:
+                                    # 复制到工作目录和当前订单存档
+                                    target_path = os.path.join(current_app.config['UPLOAD_FOLDER'], uploaded_file.filename)
+                                    shutil.copy2(source_path, target_path)
+                                    if not os.path.exists(uploads_archive):
+                                        os.makedirs(uploads_archive, exist_ok=True)
+                                    shutil.copy2(source_path, os.path.join(uploads_archive, uploaded_file.filename))
+                                    
+                                    file_path = target_path
+                                    uploaded_file.file_path = os.path.join(uploads_archive, uploaded_file.filename)
+                                    db.session.commit()
+                                    
+                                    original_file_found = True
+                                    logger.info(f"从原始订单 #{order_number} 恢复文件: {uploaded_file.filename}")
+                                    break
+                                except Exception as e:
+                                    logger.error(f"从原始订单恢复文件失败: {uploaded_file.filename}, 错误: {str(e)}")
+                    except Exception as e:
+                        logger.error(f"处理合并订单时出错: {str(e)}")
+                
+                # 搜索策略5: 在全局存档中搜索
+                if not original_file_found:
+                    # 搜索所有订单的存档目录
+                    all_orders_archive = os.path.join(current_app.config['ARCHIVE_FOLDER'], 'uploads')
+                    if os.path.exists(all_orders_archive):
+                        for order_dir in os.listdir(all_orders_archive):
+                            potential_path = os.path.join(all_orders_archive, order_dir, uploaded_file.filename)
+                            if os.path.exists(potential_path) and os.path.isfile(potential_path):
+                                try:
+                                    # 复制到工作目录和当前订单存档
+                                    target_path = os.path.join(current_app.config['UPLOAD_FOLDER'], uploaded_file.filename)
+                                    shutil.copy2(potential_path, target_path)
+                                    if not os.path.exists(uploads_archive):
+                                        os.makedirs(uploads_archive, exist_ok=True)
+                                    shutil.copy2(potential_path, os.path.join(uploads_archive, uploaded_file.filename))
+                                    
+                                    file_path = target_path
+                                    uploaded_file.file_path = os.path.join(uploads_archive, uploaded_file.filename)
+                                    db.session.commit()
+                                    
+                                    original_file_found = True
+                                    logger.info(f"从订单 #{order_dir} 存档恢复文件: {uploaded_file.filename}")
+                                    break
+                                except Exception as e:
+                                    logger.error(f"从其他订单存档恢复文件失败: {uploaded_file.filename}, 错误: {str(e)}")
+                
+                # 搜索策略6: 通过哈希值在所有已上传文件中搜索
+                if not original_file_found and file_hash:
+                    # 查找具有相同哈希值的其他上传文件
+                    same_hash_files = UploadedFile.query.filter(UploadedFile.file_hash == file_hash, 
+                                                               UploadedFile.id != uploaded_file.id).all()
+                    for same_hash_file in same_hash_files:
+                        if same_hash_file.file_path and os.path.exists(same_hash_file.file_path) and os.path.isfile(same_hash_file.file_path):
+                            try:
+                                # 复制到工作目录和当前订单存档
+                                target_path = os.path.join(current_app.config['UPLOAD_FOLDER'], uploaded_file.filename)
+                                shutil.copy2(same_hash_file.file_path, target_path)
+                                if not os.path.exists(uploads_archive):
+                                    os.makedirs(uploads_archive, exist_ok=True)
+                                shutil.copy2(same_hash_file.file_path, os.path.join(uploads_archive, uploaded_file.filename))
+                                
+                                file_path = target_path
+                                uploaded_file.file_path = os.path.join(uploads_archive, uploaded_file.filename)
+                                db.session.commit()
+                                
+                                original_file_found = True
+                                logger.info(f"通过哈希值找到相同文件: {uploaded_file.filename}, 源文件: {same_hash_file.filename}")
+                                break
+                            except Exception as e:
+                                logger.error(f"通过哈希值恢复文件失败: {uploaded_file.filename}, 错误: {str(e)}")
+                
+                # 如果所有尝试都失败，记录警告并跳过
+                if not original_file_found:
+                    logger.warning(f"无法找到文件: {uploaded_file.filename}, 跳过处理")
+                    continue
+                
+                unprocessed_files.append((uploaded_file, file_path))
+        
+        logger.info(f"找到 {len(unprocessed_files)} 个需要处理的文件")
+        
+        # 如果没有文件需要处理，直接返回
+        if not unprocessed_files:
+            flash('没有新文件需要处理', 'info')
+            return redirect(url_for('orders.view_order', order_number=current_order.order_number))
+        
+        # 处理每个文件
+        total_processed = 0
+        total_pngs = 0
+        
+        # 创建映射关系记录，用于跟踪哪个源文件生成了哪些转换文件
+        conversion_map = {}
+        process_count = 0
+        error_count = 0
+        processed_zip = False  # 跟踪是否处理了ZIP文件
+        
+        for uploaded_file, file_path in unprocessed_files:
+            filename = uploaded_file.filename
+            logger.info(f"开始处理文件: {filename}")
+            
+            # 记录处理前的转换文件数量
+            before_count = len(os.listdir(current_app.config['CONVERTED_FOLDER']))
+            
+            try:
+                # 检查文件类型
+                file_type = detect_file_type(file_path)
+                
+                if file_type == 'zip':
+                    logger.info(f"检测到ZIP文件: {filename}")
+                    # 处理ZIP文件
+                    extract_and_process_zip(file_path, current_order, converted_archive)
+                    processed_zip = True
+                    process_count += 1
+                else:
+                    # 处理非ZIP文件
+                    convert_to_png(file_path, current_order, converted_archive)
+                    process_count += 1
+                
+                # 记录转换后的文件数量变化
+                after_count = len(os.listdir(current_app.config['CONVERTED_FOLDER']))
+                converted_count = after_count - before_count
+                logger.info(f"文件 {filename} 处理完成，生成了 {converted_count} 个PNG文件")
+                
+                # 更新映射关系
+                base_name = os.path.splitext(filename)[0]
+                conversion_map[base_name] = []
+                for conv_file in os.listdir(current_app.config['CONVERTED_FOLDER']):
+                    if conv_file.startswith(base_name):
+                        conversion_map[base_name].append(conv_file)
+                
+                # 将转换后的文件复制到存档目录，并更新数据库中的文件路径
+                for conv_filename in os.listdir(current_app.config['CONVERTED_FOLDER']):
+                    if conv_filename.startswith(base_name):
+                        try:
+                            source_path = os.path.join(current_app.config['CONVERTED_FOLDER'], conv_filename)
+                            archive_path = os.path.join(converted_archive, conv_filename)
+                            shutil.copy2(source_path, archive_path)
+                            
+                            # 更新或创建数据库记录
+                            converted_file = ConvertedFile.query.filter_by(
+                                filename=conv_filename,
+                                order_id=current_order.id
+                            ).first()
+                            
+                            if not converted_file:
+                                # 创建新的转换文件记录
+                                converted_file = ConvertedFile(
+                                    filename=conv_filename,
+                                    file_path=archive_path,
+                                    source_file_id=uploaded_file.id,  # 直接使用上传文件ID
+                                    source_hash=calculate_file_hash(source_path) if os.path.exists(source_path) else None,
+                                    from_zip=(file_type == 'zip'),
+                                    zip_path=file_path if file_type == 'zip' else None,
+                                    order_id=current_order.id
+                                )
+                                db.session.add(converted_file)
+                            else:
+                                # 更新现有记录
+                                converted_file.file_path = archive_path
+                            
+                            logger.info(f"已存档转换文件: {conv_filename}, 存档路径: {archive_path}")
+                        except Exception as e:
+                            logger.error(f"存档转换文件时出错: {conv_filename}, 错误: {str(e)}")
+                
+            except Exception as e:
+                error_msg = f"处理文件 {filename} 时出错: {str(e)}"
+                logger.error(error_msg)
+                # 创建错误信息图片
+                create_info_image(filename, f"处理失败: {str(e)}")
+                error_count += 1
+        
+        # 提交数据库更改
+        db.session.commit()
+        
+        flash_message = f'处理完成！成功处理 {process_count} 个文件'
+        if error_count > 0:
+            flash_message += f'，{error_count} 个文件处理失败'
+        if processed_zip:
+            flash_message += '，包括处理ZIP压缩包内的文件'
+        
+        flash(flash_message)
+        logger.info(flash_message)
+        
+    except Exception as e:
+        error_msg = f"文件处理过程中发生错误: {str(e)}"
+        logger.error(error_msg)
+        flash(f'处理文件时发生错误: {str(e)}')
+    
+    # 跳转到活跃订单的详情页面
+    return redirect(url_for('orders.view_order', order_number=current_order.order_number))
+
+def extract_and_process_zip(archive_path, current_order, converted_archive):
+    """解压ZIP文件并处理其中的内容"""
+    logger.info(f"开始解压并处理ZIP文件: {archive_path}")
+    
+    filename = os.path.basename(archive_path)
+    base_name = os.path.splitext(filename)[0]
+    
+    # 计算原始ZIP文件的哈希值
+    zip_file_hash = calculate_file_hash(archive_path)
+    
+    # 检查这个ZIP是否已经处理过（通过哈希值检查）
+    if zip_file_hash:
+        existing_process = ConvertedFile.query.filter_by(
+            source_hash=zip_file_hash,
+            order_id=current_order.id,
+            from_zip=True
+        ).first()
+        
+        if existing_process:
+            logger.info(f"ZIP文件 {filename} (哈希: {zip_file_hash[:8]}...) 已经处理过，跳过")
+            # 检查转换文件是否存在于工作目录
+            any_conversion_exists = False
+            for conv_file in ConvertedFile.query.filter_by(
+                source_hash=zip_file_hash,
+                order_id=current_order.id
+            ).all():
+                expected_path = os.path.join(current_app.config['CONVERTED_FOLDER'], conv_file.filename)
+                if os.path.exists(expected_path):
+                    any_conversion_exists = True
+                    break
+            
+            # 如果所有转换文件都不存在，那么仍然需要处理
+            if any_conversion_exists:
+                return
+            logger.info(f"ZIP文件 {filename} 已处理记录存在，但转换文件丢失，重新处理")
+    
+    # 创建临时目录用于解压缩
+    temp_dir = tempfile.mkdtemp()
+    
+    try:
+        # 解压ZIP文件
+        with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+            # 检查编码
+            for zip_info in zip_ref.infolist():
+                try:
+                    # 尝试使用utf-8解码
+                    filename = zip_info.filename.encode('cp437').decode('utf-8')
+                except:
+                    # 如果失败，尝试使用系统默认编码
+                    try:
+                        filename = zip_info.filename.encode('cp437').decode('gbk')
+                    except:
+                        # 如果都失败，使用原始名称
+                        filename = zip_info.filename
+                
+                # 创建安全的文件名
+                safe_filename = filename
+                for char in r'<>:"/\|?*':
+                    safe_filename = safe_filename.replace(char, '_')
+                
+                # 更新文件名
+                if safe_filename != zip_info.filename:
+                    # 对于文件名有问题的情况，单独提取并重命名
+                    source = zip_ref.read(zip_info.filename)
+                    target_path = os.path.join(temp_dir, safe_filename)
+                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    with open(target_path, 'wb') as f:
+                        f.write(source)
+                else:
+                    # 常规情况，提取到临时目录
+                    zip_ref.extract(zip_info, temp_dir)
+        
+        logger.info(f"ZIP文件解压完成，开始处理内容: {archive_path}")
+        
+        # 跟踪是否处理了嵌套的ZIP文件
+        nested_zip_processed = False
+        
+        # 递归处理所有文件
+        def process_directory(directory, depth=0):
+            nonlocal nested_zip_processed
+            
+            if depth > 5:  # 防止无限递归
+                logger.warning(f"达到最大递归深度 (5)，停止处理: {directory}")
+                return
+            
+            logger.info(f"处理目录 (深度 {depth}): {directory}")
+            
+            for root, dirs, files in os.walk(directory):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    
+                    try:
+                        # 检查文件类型
+                        file_type = detect_file_type(file_path)
+                        
+                        if file_type == 'zip' and depth < 3:  # 限制嵌套ZIP处理深度
+                            logger.info(f"发现嵌套ZIP文件: {file_path}")
+                            # 创建新目录解压嵌套ZIP
+                            nested_temp_dir = tempfile.mkdtemp()
+                            with zipfile.ZipFile(file_path, 'r') as nested_zip:
+                                nested_zip.extractall(nested_temp_dir)
+                            
+                            # 递归处理嵌套ZIP
+                            process_directory(nested_temp_dir, depth + 1)
+                            nested_zip_processed = True
+                            
+                            # 完成后删除临时目录
+                            shutil.rmtree(nested_temp_dir)
+                        elif allowed_file(file):
+                            # 处理支持的文件类型
+                            # 传递原始ZIP的哈希值，用于关联所有从该ZIP提取的文件
+                            convert_to_png(file_path, current_order, converted_archive, from_zip=True, zip_path=archive_path)
+                    except Exception as e:
+                        logger.error(f"处理ZIP内文件时出错 ({file_path}): {str(e)}")
+                        # 创建错误信息图片
+                        error_filename = f"info_zip_{base_name}_{os.path.basename(file_path)}.png"
+                        create_info_image(
+                            error_filename, 
+                            f"处理ZIP内文件失败: {os.path.basename(file_path)}\n错误: {str(e)}"
+                        )
+        
+        # 开始处理解压后的目录
+        process_directory(temp_dir)
+        
+        # 如果没有处理任何文件，创建提示图片
+        if not nested_zip_processed and len(os.listdir(current_app.config['CONVERTED_FOLDER'])) == 0:
+            logger.warning(f"ZIP文件未包含任何有效文件: {archive_path}")
+            create_info_image(
+                f"info_{base_name}.png", 
+                f"ZIP文件 {filename} 不包含任何支持的文件类型"
+            )
+        
+    except Exception as e:
+        logger.error(f"处理ZIP文件时出错 ({archive_path}): {str(e)}")
+        create_info_image(
+            f"info_{base_name}.png", 
+            f"处理ZIP文件失败: {filename}\n错误: {str(e)}"
+        )
+    finally:
+        # 清理临时目录
+        shutil.rmtree(temp_dir)
+        logger.info(f"ZIP处理完成，临时目录已清理: {archive_path}")
+
+def convert_to_png(file_path, current_order, converted_archive, from_zip=False, zip_path=None):
+    """将文件转换为PNG格式"""
+    # 使用os.path.basename确保正确获取文件名，避免编码问题
+    filename = os.path.basename(file_path)
+    
+    # 尝试规范化文件名，避免编码问题
+    try:
+        # 计算文件的哈希值作为唯一标识
+        source_hash = calculate_file_hash(file_path)
+        
+        # 获取文件扩展名和基本名
+        base_name_parts = os.path.splitext(filename)
+        base_name = base_name_parts[0]
+        ext = base_name_parts[1].lower() if len(base_name_parts) > 1 else ""
+        
+        # 检查该文件是否已经被处理过（通过哈希值查找）
+        existing_conversion = None
+        if source_hash:
+            existing_conversion = ConvertedFile.query.filter_by(
+                source_hash=source_hash,
+                order_id=current_order.id
+            ).first()
+        
+        # 如果已经处理过并且文件存在，则跳过处理
+        if existing_conversion and os.path.exists(os.path.join(current_app.config['CONVERTED_FOLDER'], existing_conversion.filename)):
+            logger.info(f"文件 {filename} (哈希: {source_hash[:8]}...) 已处理过，跳过")
+            return
+    except Exception as e:
+        logger.error(f"处理文件名时出错: {str(e)}")
+        # 继续处理，使用原始文件名
+        base_name = os.path.splitext(filename)[0]
+    source_hash = calculate_file_hash(file_path)
+    
+    # 如果已经是PNG文件且不是从ZIP中提取的，则直接复制
+    if is_png_file(file_path) and not from_zip:
+        output_filename = f"{base_name}.png"
+        output_path = os.path.join(current_app.config['CONVERTED_FOLDER'], output_filename)
+        shutil.copy2(file_path, output_path)
+        
+        # 记录转换文件
+        converted_file = ConvertedFile(
+            filename=output_filename,
+            file_path=output_path,
+            order_id=current_order.id,
+            from_zip=from_zip,
+            zip_path=zip_path if from_zip else None,
+            source_hash=source_hash
+        )
+        
+        # 关联到源文件
+        if not from_zip:
+            source_file = UploadedFile.query.filter_by(
+                filename=filename,
+                order_id=current_order.id
+            ).first()
+            if source_file:
+                converted_file.source_file_id = source_file.id
+        
+        db.session.add(converted_file)
+        db.session.commit()
+        
+        return
+    
+    # 根据文件类型调用相应的转换函数
+    file_type = detect_file_type(file_path)
+    
+    before_count = len(os.listdir(current_app.config['CONVERTED_FOLDER']))
+    
+    if file_type == 'pdf':
+        convert_pdf_to_png(file_path, current_order, converted_archive, from_zip, zip_path, source_hash)
+    elif file_type in ['docx', 'doc']:
+        convert_docx_to_png(file_path, current_order, converted_archive, from_zip, zip_path, source_hash)
+    elif file_type in ['pptx', 'ppt']:
+        convert_pptx_to_png(file_path, current_order, converted_archive, from_zip, zip_path, source_hash)
+    elif file_type in ['jpg', 'jpeg', 'png', 'bmp', 'tiff']:
+        convert_image_to_png(file_path, current_order, converted_archive, from_zip, zip_path, source_hash)
+    else:
+        # 不支持的文件类型
+        create_info_image(
+            f"info_{base_name}.png", 
+            f"不支持的文件类型: {filename}\n检测类型: {file_type}"
+        )
+    
+    # 检查是否生成了新的PNG文件
+    after_count = len(os.listdir(current_app.config['CONVERTED_FOLDER']))
+    if after_count == before_count:
+        # 如果没有生成PNG文件，创建错误信息图片
+        create_info_image(
+            f"info_{base_name}.png", 
+            f"转换失败，未能生成PNG: {filename}"
+        )
+
+def is_png_file(file_path):
+    """检查文件是否为PNG格式"""
+    return file_path.lower().endswith('.png')
+
+def detect_file_type(file_path):
+    """智能检测文件类型"""
+    # 先尝试通过文件扩展名判断
+    ext = os.path.splitext(file_path)[1].lower()
+    
+    if ext == '.pdf':
+        return 'pdf'
+    elif ext in ['.docx', '.doc']:
+        return 'docx'
+    elif ext in ['.pptx', '.ppt']:
+        return 'pptx'
+    elif ext in ['.jpg', '.jpeg']:
+        return 'jpeg'
+    elif ext == '.png':
+        return 'png'
+    elif ext in ['.bmp', '.tiff', '.gif']:
+        return 'image'
+    
+    # 如果没有扩展名或扩展名不明确，尝试通过文件头检测
+    try:
+        with open(file_path, 'rb') as f:
+            header = f.read(8)
+            
+            # 检测PDF文件 ("%PDF")
+            if header.startswith(b'%PDF'):
+                return 'pdf'
+            
+            # 检测ZIP文件 (包括DOCX, PPTX等Office文件)
+            if header.startswith(b'PK\x03\x04'):
+                # 进一步区分Office文件和普通ZIP
+                try:
+                    with zipfile.ZipFile(file_path) as z:
+                        filelist = z.namelist()
+                        # 检查是否为Word文档
+                        if 'word/document.xml' in filelist:
+                            return 'docx'
+                        # 检查是否为PowerPoint
+                        elif 'ppt/presentation.xml' in filelist:
+                            return 'pptx'
+                        else:
+                            return 'zip'
+                except:
+                    return 'zip'
+            
+            # 检测JPEG图片
+            if header.startswith(b'\xFF\xD8\xFF'):
+                return 'jpeg'
+            
+            # 检测PNG图片
+            if header.startswith(b'\x89PNG\r\n\x1a\n'):
+                return 'png'
+            
+            # 检测BMP图片
+            if header.startswith(b'BM'):
+                return 'image'
+            
+    except Exception as e:
+        logger.error(f"检测文件类型时出错 ({file_path}): {str(e)}")
+    
+    # 默认使用文件扩展名
+    if ext and ext[1:] in ALLOWED_EXTENSIONS:
+        return ext[1:]
+    
+    return 'unknown'
+
+def create_info_image(filename, message):
+    """创建包含信息的图片"""
+    img_width, img_height = 800, 400
+    
+    # 创建一个白色背景图像
+    img = Image.new('RGB', (img_width, img_height), color='white')
+    draw = ImageDraw.Draw(img)
+    
+    try:
+        # 尝试使用系统字体
+        font = ImageFont.truetype("arial.ttf", 16)
+    except:
+        # 如果失败，使用默认字体
+        font = ImageFont.load_default()
+    
+    # 在图像上绘制文本信息
+    draw.text((20, 20), message, fill="black", font=font)
+    
+    # 添加底部提示
+    footer = "此图片表示转换过程中的错误或警告信息"
+    draw.text((20, img_height - 40), footer, fill="gray", font=font)
+    
+    # 保存图像
+    output_path = os.path.join(current_app.config['CONVERTED_FOLDER'], filename)
+    img.save(output_path)
+
+def convert_pdf_to_png(pdf_path, current_order, converted_archive, from_zip=False, zip_path=None, source_hash=None):
+    """将PDF转换为PNG"""
+    filename = os.path.basename(pdf_path)
+    base_name = os.path.splitext(filename)[0]
+    
+    # 找到源文件记录
+    source_file = None
+    if not from_zip:
+        source_file = UploadedFile.query.filter_by(
+            filename=filename,
+            order_id=current_order.id
+        ).first()
+    
+    # 打开PDF文件
+    pdf_document = fitz.open(pdf_path)
+    
+    # 遍历每一页
+    for page_num in range(len(pdf_document)):
+        page = pdf_document.load_page(page_num)
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+        output_filename = f"{base_name}_page{page_num+1}.png"
+        output_path = os.path.join(current_app.config['CONVERTED_FOLDER'], output_filename)
+        pix.save(output_path)
+        
+        # 同时保存到存档目录
+        archive_path = os.path.join(converted_archive, output_filename)
+        try:
+            shutil.copy2(output_path, archive_path)
+            logger.info(f"存档转换后的PDF页面: {output_filename}, 存档路径: {archive_path}")
+        except Exception as e:
+            logger.error(f"存档PDF页面时出错: {output_filename}, 错误: {str(e)}")
+            archive_path = output_path  # 如果存档失败，使用原始路径
+        
+        # 记录转换文件
+        converted_file = ConvertedFile(
+            filename=output_filename,
+            file_path=archive_path,  # 使用存档路径
+            order_id=current_order.id,
+            source_file_id=source_file.id if source_file else None,
+            source_hash=source_hash,
+            from_zip=from_zip,
+            zip_path=zip_path if from_zip else None
+        )
+        db.session.add(converted_file)
+    
+    pdf_document.close()
+    db.session.commit()
+
+def convert_docx_to_png(docx_path, current_order, converted_archive, from_zip=False, zip_path=None, source_hash=None):
+    """将DOCX/DOC转换为PNG"""
+    filename = os.path.basename(docx_path)
+    base_name = os.path.splitext(filename)[0]
+    
+    # 找到源文件记录
+    source_file = None
+    if not from_zip:
+        source_file = UploadedFile.query.filter_by(
+            filename=filename,
+            order_id=current_order.id
+        ).first()
+    
+    try:
+        # 打开DOCX文件
+        doc = docx.Document(docx_path)
+        
+        # 创建一个临时文本文件
+        temp_text_path = os.path.join(tempfile.gettempdir(), f"{base_name}.txt")
+        
+        with open(temp_text_path, "w", encoding="utf-8") as text_file:
+            for para in doc.paragraphs:
+                text_file.write(para.text + "\n")
+        
+        # 将文本转换为图片
+        img = Image.new('RGB', (1000, 1000), color='white')
+        draw = ImageDraw.Draw(img)
+        try:
+            font = ImageFont.truetype("arial.ttf", 14)
+        except IOError:
+            font = ImageFont.load_default()
+        
+        with open(temp_text_path, "r", encoding="utf-8") as text_file:
+            text = text_file.read()
+        
+        # 简单地将文本绘制到图像上
+        draw.text((10, 10), text, fill="black", font=font)
+        
+        output_filename = f"{base_name}.png"
+        output_path = os.path.join(current_app.config['CONVERTED_FOLDER'], output_filename)
+        img.save(output_path)
+        
+        # 同时保存到存档目录
+        archive_path = os.path.join(converted_archive, output_filename)
+        try:
+            shutil.copy2(output_path, archive_path)
+            logger.info(f"存档转换后的DOCX文件: {output_filename}, 存档路径: {archive_path}")
+        except Exception as e:
+            logger.error(f"存档DOCX文件时出错: {output_filename}, 错误: {str(e)}")
+            archive_path = output_path  # 如果存档失败，使用原始路径
+        
+        # 记录转换文件
+        converted_file = ConvertedFile(
+            filename=output_filename,
+            file_path=archive_path,  # 使用存档路径
+            order_id=current_order.id,
+            source_file_id=source_file.id if source_file else None,
+            source_hash=source_hash,
+            from_zip=from_zip,
+            zip_path=zip_path if from_zip else None
+        )
+        db.session.add(converted_file)
+        db.session.commit()
+        
+        # 清理临时文件
+        os.remove(temp_text_path)
+        
+    except Exception as e:
+        logger.error(f"转换DOCX文件时出错: {str(e)}")
+
+def convert_pptx_to_png(pptx_path, current_order, converted_archive, from_zip=False, zip_path=None, source_hash=None):
+    """将PPTX/PPT转换为PNG"""
+    filename = os.path.basename(pptx_path)
+    base_name = os.path.splitext(filename)[0]
+    
+    # 找到源文件记录
+    source_file = None
+    if not from_zip:
+        source_file = UploadedFile.query.filter_by(
+            filename=filename,
+            order_id=current_order.id
+        ).first()
+    
+    try:
+        # 打开PPTX文件
+        prs = Presentation(pptx_path)
+        
+        # 遍历每一张幻灯片
+        for i, slide in enumerate(prs.slides):
+            # 创建一个临时图像
+            img = Image.new('RGB', (1280, 720), color='white')
+            draw = ImageDraw.Draw(img)
+            
+            # 提取幻灯片中的文本
+            text = ""
+            for shape in slide.shapes:
+                if hasattr(shape, "text"):
+                    text += shape.text + "\n"
+            
+            # 绘制文本到图像
+            try:
+                font = ImageFont.truetype("arial.ttf", 14)
+            except IOError:
+                font = ImageFont.load_default()
+            
+            draw.text((10, 10), text, fill="black", font=font)
+            
+            output_filename = f"{base_name}_slide{i+1}.png"
+            output_path = os.path.join(current_app.config['CONVERTED_FOLDER'], output_filename)
+            img.save(output_path)
+            
+            # 同时保存到存档目录
+            archive_path = os.path.join(converted_archive, output_filename)
+            try:
+                shutil.copy2(output_path, archive_path)
+                logger.info(f"存档转换后的PPTX幻灯片: {output_filename}, 存档路径: {archive_path}")
+            except Exception as e:
+                logger.error(f"存档PPTX幻灯片时出错: {output_filename}, 错误: {str(e)}")
+                archive_path = output_path  # 如果存档失败，使用原始路径
+            
+            # 记录转换文件
+            converted_file = ConvertedFile(
+                filename=output_filename,
+                file_path=archive_path,  # 使用存档路径
+                order_id=current_order.id,
+                source_file_id=source_file.id if source_file else None,
+                source_hash=source_hash,
+                from_zip=from_zip,
+                zip_path=zip_path if from_zip else None
+            )
+            db.session.add(converted_file)
+        
+        db.session.commit()
+            
+    except Exception as e:
+        logger.error(f"转换PPTX文件时出错: {str(e)}")
+
+def convert_image_to_png(image_path, current_order, converted_archive, from_zip=False, zip_path=None, source_hash=None):
+    """将其他图片格式转换为PNG"""
+    filename = os.path.basename(image_path)
+    base_name = os.path.splitext(filename)[0]
+    
+    # 找到源文件记录
+    source_file = None
+    if not from_zip:
+        source_file = UploadedFile.query.filter_by(
+            filename=filename,
+            order_id=current_order.id
+        ).first()
+    
+    try:
+        img = Image.open(image_path)
+        output_filename = f"{base_name}.png"
+        output_path = os.path.join(current_app.config['CONVERTED_FOLDER'], output_filename)
+        
+        # 如果原图像有透明通道，保留它
+        if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+            img.save(output_path, 'PNG')
+        else:
+            # 转换为RGB然后保存为PNG
+            img = img.convert('RGB')
+            img.save(output_path, 'PNG')
+        
+        # 同时保存到存档目录
+        archive_path = os.path.join(converted_archive, output_filename)
+        try:
+            shutil.copy2(output_path, archive_path)
+            logger.info(f"存档转换后的图片: {output_filename}, 存档路径: {archive_path}")
+        except Exception as e:
+            logger.error(f"存档图片时出错: {output_filename}, 错误: {str(e)}")
+            archive_path = output_path  # 如果存档失败，使用原始路径
+        
+        # 记录转换文件
+        converted_file = ConvertedFile(
+            filename=output_filename,
+            file_path=archive_path,  # 使用存档路径
+            order_id=current_order.id,
+            source_file_id=source_file.id if source_file else None,
+            source_hash=source_hash,
+            from_zip=from_zip,
+            zip_path=zip_path if from_zip else None
+        )
+        db.session.add(converted_file)
+        db.session.commit()
+            
+    except Exception as e:
+        logger.error(f"转换图像文件时出错: {str(e)}")
+
+@main_bp.route('/preview/<filename>')
+@login_required  # 添加登录验证
+def preview_file(filename):
+    """预览转换后的文件"""
+    # 检查是否提供了订单ID或哈希值
+    order_id = request.args.get('order_id')
+    order_number = request.args.get('order_number')
+    source_hash = request.args.get('source_hash')
+    
+    # 首先尝试从转换目录获取文件
+    file_path = os.path.join(current_app.config['CONVERTED_FOLDER'], filename)
+    
+    if not os.path.exists(file_path):
+        found = False
+        
+        # 1. 尝试通过订单ID查找
+        if order_id:
+            try:
+                order = Order.query.get(order_id)
+                if order:
+                    # 尝试查找此订单的对应文件
+                    converted_file = ConvertedFile.query.filter_by(
+                        filename=filename, 
+                        order_id=order.id
+                    ).first()
+                    
+                    if converted_file and os.path.exists(converted_file.file_path):
+                        shutil.copy2(converted_file.file_path, file_path)
+                        logger.info(f"从原始路径恢复到转换目录: {converted_file.file_path} -> {file_path}")
+                        found = True
+                    elif order.order_number:
+                        # 尝试在该订单存档目录中寻找
+                        archive_path = os.path.join(
+                            current_app.config['ARCHIVE_FOLDER'], 
+                            'converted', 
+                            order.order_number, 
+                            filename
+                        )
+                        if os.path.exists(archive_path):
+                            shutil.copy2(archive_path, file_path)
+                            logger.info(f"从订单存档恢复到转换目录: {archive_path} -> {file_path}")
+                            found = True
+            except Exception as e:
+                logger.error(f"通过订单ID查找文件失败: {str(e)}")
+        
+        # 2. 尝试通过订单号查找
+        if not found and order_number:
+            try:
+                order = Order.query.filter_by(order_number=order_number).first()
+                if order:
+                    archive_path = os.path.join(
+                        current_app.config['ARCHIVE_FOLDER'], 
+                        'converted', 
+                        order_number, 
+                        filename
+                    )
+                    if os.path.exists(archive_path):
+                        shutil.copy2(archive_path, file_path)
+                        logger.info(f"从订单号存档恢复到转换目录: {archive_path} -> {file_path}")
+                        found = True
+            except Exception as e:
+                logger.error(f"通过订单号查找文件失败: {str(e)}")
+        
+        # 3. 尝试通过哈希值查找
+        if not found and source_hash:
+            try:
+                # 查找具有相同源哈希值的所有转换文件
+                hash_files = ConvertedFile.query.filter_by(source_hash=source_hash).all()
+                
+                for hash_file in hash_files:
+                    if os.path.exists(hash_file.file_path):
+                        # 找到匹配的哈希文件，复制并重命名
+                        shutil.copy2(hash_file.file_path, file_path)
+                        logger.info(f"通过哈希值恢复到转换目录: {hash_file.file_path} -> {file_path}")
+                        found = True
+                        break
+                
+                # 如果未找到，检查存档目录中的所有订单
+                if not found:
+                    archive_base = os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted')
+                    if os.path.exists(archive_base):
+                        for order_dir in os.listdir(archive_base):
+                            for archive_file in os.listdir(os.path.join(archive_base, order_dir)):
+                                # 获取此存档文件的哈希值
+                                archived_converted = ConvertedFile.query.filter_by(
+                                    filename=archive_file
+                                ).first()
+                                
+                                if archived_converted and archived_converted.source_hash == source_hash:
+                                    archive_path = os.path.join(archive_base, order_dir, archive_file)
+                                    if os.path.exists(archive_path):
+                                        # 复制到目标位置，但使用请求的文件名
+                                        shutil.copy2(archive_path, file_path)
+                                        logger.info(f"从存档通过哈希值恢复: {archive_path} -> {file_path}")
+                                        found = True
+                                        break
+                            
+                            if found:
+                                break
+            except Exception as e:
+                logger.error(f"通过哈希值查找文件失败: {str(e)}")
+        
+        # 4. 尝试从全局存档目录查找
+        if not found:
+            archive_path = os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted', filename)
+            if os.path.exists(archive_path):
+                shutil.copy2(archive_path, file_path)
+                logger.info(f"从全局存档恢复到转换目录: {archive_path} -> {file_path}")
+                found = True
+        
+        # 5. 搜索所有订单的存档目录
+        if not found:
+            try:
+                archives_base = os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted')
+                if os.path.exists(archives_base):
+                    for order_dir in os.listdir(archives_base):
+                        potential_path = os.path.join(archives_base, order_dir, filename)
+                        if os.path.exists(potential_path):
+                            shutil.copy2(potential_path, file_path)
+                            logger.info(f"从其他订单存档恢复: {potential_path} -> {file_path}")
+                            found = True
+                            break
+            except Exception as e:
+                logger.error(f"搜索所有订单存档失败: {str(e)}")
+        
+        # 如果仍然找不到文件，返回错误图像
+        if not found:
+            # 返回一个默认的文件不存在图像
+            file_not_found_path = os.path.join(current_app.root_path, 'static', 'images', 'file-not-found.png')
+            if os.path.exists(file_not_found_path):
+                return send_file(file_not_found_path, mimetype='image/png')
+            else:
+                return render_template('error.html', message=f"文件 {filename} 不存在或已被删除"), 404
+    
+    return send_from_directory(current_app.config['CONVERTED_FOLDER'], filename)
+
+@main_bp.route('/download/<filename>')
+@login_required  # 添加登录验证
+def download_file(filename):
+    """下载转换后的文件"""
+    # 检查是否提供了订单ID、订单号或哈希值
+    order_id = request.args.get('order_id')
+    order_number = request.args.get('order_number')
+    source_hash = request.args.get('source_hash')
+    
+    # 首先尝试从转换目录获取文件
+    file_path = os.path.join(current_app.config['CONVERTED_FOLDER'], filename)
+    
+    if not os.path.exists(file_path):
+        found = False
+        
+        # 1. 尝试通过订单ID查找
+        if order_id:
+            try:
+                order = Order.query.get(order_id)
+                if order:
+                    # 尝试查找此订单的对应文件
+                    converted_file = ConvertedFile.query.filter_by(
+                        filename=filename, 
+                        order_id=order.id
+                    ).first()
+                    
+                    if converted_file and os.path.exists(converted_file.file_path):
+                        shutil.copy2(converted_file.file_path, file_path)
+                        logger.info(f"下载前从原始路径恢复: {converted_file.file_path} -> {file_path}")
+                        found = True
+                    elif order.order_number:
+                        # 尝试在该订单存档目录中寻找
+                        archive_path = os.path.join(
+                            current_app.config['ARCHIVE_FOLDER'], 
+                            'converted', 
+                            order.order_number, 
+                            filename
+                        )
+                        if os.path.exists(archive_path):
+                            shutil.copy2(archive_path, file_path)
+                            logger.info(f"下载前从订单存档恢复: {archive_path} -> {file_path}")
+                            found = True
+            except Exception as e:
+                logger.error(f"下载时通过订单ID查找文件失败: {str(e)}")
+        
+        # 2. 尝试通过哈希值查找
+        if not found and source_hash:
+            try:
+                # 查找具有相同源哈希值的所有转换文件
+                hash_files = ConvertedFile.query.filter_by(source_hash=source_hash).all()
+                
+                for hash_file in hash_files:
+                    if os.path.exists(hash_file.file_path):
+                        # 找到匹配的哈希文件，复制并重命名
+                        shutil.copy2(hash_file.file_path, file_path)
+                        logger.info(f"下载前通过哈希值恢复: {hash_file.file_path} -> {file_path}")
+                        found = True
+                        break
+                
+                # 如果未找到，检查存档目录中的所有订单
+                if not found:
+                    archive_base = os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted')
+                    if os.path.exists(archive_base):
+                        for order_dir in os.listdir(archive_base):
+                            for archive_file in os.listdir(os.path.join(archive_base, order_dir)):
+                                # 获取此存档文件的哈希值
+                                archived_converted = ConvertedFile.query.filter_by(
+                                    filename=archive_file
+                                ).first()
+                                
+                                if archived_converted and archived_converted.source_hash == source_hash:
+                                    archive_path = os.path.join(archive_base, order_dir, archive_file)
+                                    if os.path.exists(archive_path):
+                                        # 复制到目标位置，但使用请求的文件名
+                                        shutil.copy2(archive_path, file_path)
+                                        logger.info(f"从存档通过哈希值恢复: {archive_path} -> {file_path}")
+                                        found = True
+                                        break
+                            
+                            if found:
+                                break
+            except Exception as e:
+                logger.error(f"通过哈希值查找文件失败: {str(e)}")
+        
+        # 使用与preview_file相同的恢复逻辑，但简化代码
+        recovery_attempts = [
+            # 3. 通过订单号查找
+            (lambda: order_number and os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted', order_number, filename)),
+            # 4. 全局存档目录
+            (lambda: os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted', filename)),
+            # 5. 搜索所有订单的存档目录
+            (lambda: next((os.path.join(os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted'), d, filename) 
+                          for d in os.listdir(os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted')) 
+                          if os.path.exists(os.path.join(os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted'), d, filename))), 
+                         None) if os.path.exists(os.path.join(current_app.config['ARCHIVE_FOLDER'], 'converted')) else None)
+        ]
+        
+        # 尝试恢复文件
+        for get_recovery_path in recovery_attempts:
+            if found:
+                break
+                
+            try:
+                recovery_path = get_recovery_path()
+                if recovery_path and os.path.exists(recovery_path):
+                    shutil.copy2(recovery_path, file_path)
+                    logger.info(f"下载前从备用位置恢复文件: {recovery_path} -> {file_path}")
+                    found = True
+            except Exception as e:
+                logger.error(f"下载恢复尝试失败: {str(e)}")
+        
+        # 如果仍然找不到文件，返回错误
+        if not found:
+            return render_template('error.html', message=f"文件 {filename} 不存在或已被删除，无法下载"), 404
+    
+    # 文件存在，可以下载
+    return send_from_directory(current_app.config['CONVERTED_FOLDER'], filename, as_attachment=True)
+
+@main_bp.route('/download_all')
+@login_required  # 添加登录验证
+def download_all():
+    # 记录上传开始时间
+    start_time = datetime.now()
+    
+    # 获取当前用户ID
+    current_user_id = session.get('admin_id')
+    current_user = AdminUser.query.get(current_user_id)
+    
+    # 获取当前用户的活跃订单
+    current_order = Order.query.filter_by(is_active=True, user_id=current_user_id).first()
+    
+    # 如果没有活跃订单，但当前用户是管理员，则检查是否存在其他活跃订单
+    if not current_order and current_user.is_admin:
+        current_order = Order.query.filter_by(is_active=True).first()
+        if current_order:
+            logger.info(f"管理员处理文件：将现有活跃订单 #{current_order.order_number} 分配给用户 {current_user_id}")
+    
+    # 如果没有活跃订单，返回错误
+    if not current_order:
+        flash('没有活跃订单，请先上传文件')
+        return redirect(url_for('orders.index'))
+    
+    # 创建一个包含所有转换文件的ZIP
+    zip_filename = f"all_converted_{uuid.uuid4().hex[:8]}.zip"
+    zip_path = os.path.join(tempfile.gettempdir(), zip_filename)
+    
+    with zipfile.ZipFile(zip_path, 'w') as zip_file:
+        for filename in os.listdir(current_app.config['CONVERTED_FOLDER']):
+            file_path = os.path.join(current_app.config['CONVERTED_FOLDER'], filename)
+            if os.path.isfile(file_path):
+                zip_file.write(file_path, arcname=filename)
+    
+    return send_from_directory(tempfile.gettempdir(), zip_filename, as_attachment=True)
+
+@main_bp.route('/download_all_separate')
+@login_required  # 添加登录验证
+def download_all_separate():
+    """返回所有PNG文件的下载链接列表"""
+    files = []
+    for filename in os.listdir(current_app.config['CONVERTED_FOLDER']):
+        if os.path.isfile(os.path.join(current_app.config['CONVERTED_FOLDER'], filename)):
+            files.append({
+                'name': filename,
+                'url': url_for('main.download_file', filename=filename)
+            })
+    return render_template('download_list.html', files=files)
+
+@main_bp.route('/download_all_files')
+@login_required  # 添加登录验证
+def download_all_files():
+    """提供批量下载所有PNG文件的功能"""
+    files = []
+    for filename in os.listdir(current_app.config['CONVERTED_FOLDER']):
+        if os.path.isfile(os.path.join(current_app.config['CONVERTED_FOLDER'], filename)):
+            file_url = url_for('main.download_file', filename=filename)
+            files.append({
+                'url': file_url,
+                'name': filename
+            })
+    
+    return jsonify(files)
+
+@main_bp.route('/delete_all_uploads', methods=['POST'])
+@csrf.exempt  # 豁免CSRF保护
+@login_required  # 添加登录验证
+def delete_all_uploads():
+    # 获取当前用户ID
+    current_user_id = session.get('admin_id')
+    current_user = AdminUser.query.get(current_user_id)
+    
+    # 删除上传文件夹中的所有文件
+    for filename in os.listdir(current_app.config['UPLOAD_FOLDER']):
+        file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+    
+    # 同时删除转换文件夹中的所有文件
+    for filename in os.listdir(current_app.config['CONVERTED_FOLDER']):
+        file_path = os.path.join(current_app.config['CONVERTED_FOLDER'], filename)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+    
+    # 将当前用户的活跃订单标记为非活跃
+    current_order = Order.query.filter_by(is_active=True, user_id=current_user_id).first()
+    if current_order:
+        # 这里不需要将订单设为非活跃，也不需要创建新订单
+        # 只是清空当前活跃订单的文件
+        logger.info(f"清空了活跃订单 #{current_order.order_number} 的所有文件")
+    
+    flash('所有文件已清空')
+    
+    # 获取当前用户活跃订单
+    current_user_id = session.get('admin_id')
+    current_order = Order.query.filter_by(is_active=True, user_id=current_user_id).first()
+    
+    # 重定向到订单详情页面
+    if current_order:
+        return redirect(url_for('orders.view_order', order_number=current_order.order_number))
+    return redirect(url_for('orders.index'))
+
+@main_bp.route('/delete_upload/<filename>')
+@login_required  # 添加登录验证
+def delete_upload(filename):
+    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+    if os.path.exists(file_path):
+        # 处理目录情况
+        if os.path.isdir(file_path):
+            # 遍历并删除目录中的所有文件
+            for root, dirs, files in os.walk(file_path):
+                for file in files:
+                    try:
+                        os.remove(os.path.join(root, file))
+                    except Exception as e:
+                        logger.error(f"删除目录中的文件时出错: {file}, 错误: {str(e)}")
+            # 删除目录本身
+            try:
+                shutil.rmtree(file_path)
+                logger.info(f"已删除目录: {filename}")
+                flash(f'目录 {filename} 已删除')
+            except Exception as e:
+                logger.error(f"删除目录时出错: {filename}, 错误: {str(e)}")
+                flash(f'删除目录 {filename} 时出错: {str(e)}', 'error')
+        else:
+            # 处理普通文件
+            os.remove(file_path)
+            
+            # 同时删除对应的转换文件
+            base_name = os.path.splitext(filename)[0]
+            for converted_file in os.listdir(current_app.config['CONVERTED_FOLDER']):
+                # 删除所有以该文件名为前缀的转换文件
+                if converted_file.startswith(base_name + "_") or converted_file == base_name + ".png":
+                    converted_path = os.path.join(current_app.config['CONVERTED_FOLDER'], converted_file)
+                    if os.path.isfile(converted_path):
+                        os.remove(converted_path)
+            
+            # 删除数据库中的记录
+            uploaded_file = UploadedFile.query.filter_by(filename=filename).first()
+            if uploaded_file:
+                # 删除相关的转换文件记录
+                ConvertedFile.query.filter_by(source_file_id=uploaded_file.id).delete()
+                # 删除上传文件记录
+                db.session.delete(uploaded_file)
+                db.session.commit()
+            
+            flash(f'文件 {filename} 及其转换结果已删除')
+    
+    # 获取当前用户活跃订单
+    current_user_id = session.get('admin_id')
+    current_order = Order.query.filter_by(is_active=True, user_id=current_user_id).first()
+    
+    # 重定向到订单详情页面
+    if current_order:
+        return redirect(url_for('orders.view_order', order_number=current_order.order_number))
+    return redirect(url_for('orders.index')) 
+
+@main_bp.route('/clear_png_cache', methods=['POST'])
+@csrf.exempt  # 豁免CSRF保护
+@login_required  # 添加登录验证
+def clear_png_cache():
+    """清空PNG缓存，但保留原始文件和数据库记录，以便重新处理"""
+    # 获取当前用户ID
+    current_user_id = session.get('admin_id')
+    current_user = AdminUser.query.get(current_user_id)
+    
+    # 获取当前用户的活跃订单
+    current_order = Order.query.filter_by(is_active=True, user_id=current_user_id).first()
+    
+    # 如果没有活跃订单，但当前用户是管理员，则检查是否存在其他活跃订单
+    if not current_order and current_user.is_admin:
+        current_order = Order.query.filter_by(is_active=True).first()
+        if current_order:
+            logger.info(f"管理员处理文件：将现有活跃订单 #{current_order.order_number} 分配给用户 {current_user_id}")
+    
+    # 如果没有活跃订单，返回错误
+    if not current_order:
+        flash('没有活跃订单，请先上传文件')
+        return redirect(url_for('orders.index'))
+    
+    # 1. 删除数据库中当前订单的所有转换文件记录
+    try:
+        deleted_records = ConvertedFile.query.filter_by(order_id=current_order.id).delete()
+        db.session.commit()
+        logger.info(f"已从数据库删除 {deleted_records} 条转换文件记录，订单 #{current_order.order_number}")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"删除数据库转换记录时出错: {str(e)}")
+        flash(f'删除数据库记录时出错: {str(e)}')
+        return redirect(url_for('orders.view_order', order_number=current_order.order_number))
+    
+    # 2. 删除转换文件夹中的所有文件
+    deleted_count = 0
+    for filename in os.listdir(current_app.config['CONVERTED_FOLDER']):
+        file_path = os.path.join(current_app.config['CONVERTED_FOLDER'], filename)
+        if os.path.isfile(file_path):
+            try:
+                os.remove(file_path)
+                deleted_count += 1
+            except Exception as e:
+                logger.error(f"删除PNG文件时出错: {filename}, 错误: {str(e)}")
+    
+    # 记录操作
+    logger.info(f"清空了活跃订单 #{current_order.order_number} 的PNG池，共删除 {deleted_count} 个文件和 {deleted_records} 条数据库记录")
+    
+    flash(f'PNG池已完全清空，共删除 {deleted_count} 个文件。下次处理将重新生成所有PNG文件。')
+    
+    # 重定向到订单详情页面
+    return redirect(url_for('orders.view_order', order_number=current_order.order_number)) 

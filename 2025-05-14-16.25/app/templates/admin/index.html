@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}管理员控制面板 - 文件转换工具{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2 class="mb-0">管理员控制面板</h2>
+            <div>
+                <a href="{{ url_for('admin.settings') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-gear"></i> 系统设置
+                </a>
+                <a href="{{ url_for('main.index') }}" class="btn btn-sm btn-outline-secondary ms-2">
+                    <i class="bi bi-house"></i> 回到首页
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 统计数据 -->
+    <div class="col-12 mb-4">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="card bg-primary text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="card-title">总订单数</h5>
+                                <h2 class="display-4 fw-bold mb-0">{{ orders_count }}</h2>
+                            </div>
+                            <i class="bi bi-clipboard-data" style="font-size: 3rem;"></i>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex align-items-center justify-content-between">
+                        <a href="{{ url_for('admin.orders') }}" class="text-white text-decoration-none">查看详情</a>
+                        <i class="bi bi-arrow-right text-white"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card bg-success text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="card-title">活跃订单</h5>
+                                <h2 class="display-4 fw-bold mb-0">{{ active_orders }}</h2>
+                            </div>
+                            <i class="bi bi-clipboard-check" style="font-size: 3rem;"></i>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex align-items-center justify-content-between">
+                        <a href="{{ url_for('orders.index') }}" class="text-white text-decoration-none">查看活跃订单</a>
+                        <i class="bi bi-arrow-right text-white"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card bg-info text-white h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="card-title">登录时间</h5>
+                                <p class="mb-0">{{ session.get('last_login', now).strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                            </div>
+                            <i class="bi bi-person-check" style="font-size: 3rem;"></i>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex align-items-center justify-content-between">
+                        <a href="{{ url_for('admin.change_password') }}" class="text-white text-decoration-none">修改密码</a>
+                        <i class="bi bi-arrow-right text-white"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 最近订单 -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">最近订单</h5>
+                <a href="{{ url_for('admin.orders') }}" class="btn btn-sm btn-outline-primary">
+                    查看全部订单
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_orders %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped">
+                        <thead>
+                            <tr>
+                                <th>订单号</th>
+                                <th>创建时间</th>
+                                <th>文件数</th>
+                                <th>状态</th>
+                                <th>备注</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in recent_orders %}
+                            <tr class="{{ 'table-info' if order.is_active else '' }}">
+                                <td>{{ order.order_number }}</td>
+                                <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>{{ order.files|length }} / {{ order.conversions|length }}</td>
+                                <td>
+                                    {% if order.status == order.STATUS_PENDING %}
+                                    <span class="badge bg-warning">{{ order.status_display }}</span>
+                                    {% elif order.status == order.STATUS_MATERIAL %}
+                                    <span class="badge bg-info">{{ order.status_display }}</span>
+                                    {% elif order.status == order.STATUS_REVIEWED %}
+                                    <span class="badge bg-success">{{ order.status_display }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ order.status_display }}</span>
+                                    {% endif %}
+                                    
+                                    {% if order.is_active %}
+                                    <span class="badge bg-primary">活跃</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="text-truncate" style="max-width: 200px;" title="{{ order.note }}">{{ order.note or '-' }}</div>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('orders.view_order', order_number=order.order_number) }}" class="btn btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        {% if not order.is_active %}
+                                        <form action="{{ url_for('orders.activate_order', order_number=order.order_number) }}" method="post" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-outline-success" title="回滚到此订单" onclick="return confirm('确定要回滚到此订单吗？这将恢复该订单的所有文件并替换当前工作环境！');">
+                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-outline-danger btn-delete-order" title="删除订单" data-order-number="{{ order.order_number }}">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <p class="mb-0">暂无订单记录</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 删除订单按钮点击事件
+        const deleteButtons = document.querySelectorAll('.btn-delete-order');
+        deleteButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const orderNumber = this.getAttribute('data-order-number');
+                if (confirm(`确定要删除订单 #${orderNumber} 吗？此操作不可恢复！`)) {
+                    // 发送AJAX请求删除订单
+                    fetch(`/admin/api/delete_order/${orderNumber}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert(data.message);
+                            // 刷新页面
+                            location.reload();
+                        } else {
+                            alert('删除失败: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('删除失败，请重试');
+                    });
+                }
+            });
+        });
+    });
+</script>
+{% endblock %} 

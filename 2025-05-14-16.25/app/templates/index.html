@@ -1,0 +1,599 @@
+{% extends "base.html" %}
+
+{% block title %}文件转PNG工具 - 首页{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">文件上传区域</h5>
+                {% if uploaded_files %}
+                    <form action="{{ url_for('main.delete_all_uploads') }}" method="post" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定要清空所有文件吗？这将同时删除上传的文件和转换后的PNG文件！');">清空文件池</button>
+                    </form>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('main.upload_file') }}" method="post" enctype="multipart/form-data" id="upload-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="dropzone" id="dropzone">
+                        <p>拖放文件至此处上传，或点击选择文件</p>
+                        <p class="text-muted small">支持PDF、Word、PPT、图片和压缩包等多种格式</p>
+                        <p class="text-danger small"><strong>注意：</strong>压缩包仅支持ZIP格式，不支持RAR格式（系统会自动识别ZIP文件）</p>
+                        <input type="file" name="files[]" id="file-input" multiple style="display: none;">
+                    </div>
+                    <div class="d-grid">
+                        <button type="button" id="upload-button" class="btn btn-primary">上传文件</button>
+                    </div>
+                    <div class="mt-2 text-center">
+                        <small class="text-muted">点击上方按钮选择要上传的文件，或直接拖拽文件到上传区域</small>
+                    </div>
+                    
+                    <!-- 上传状态指示器 -->
+                    <div id="upload-status" class="alert alert-info mt-3" style="display: none;">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">正在上传...</span>
+                            </div>
+                            <div>文件上传中，请稍候...</div>
+                        </div>
+                    </div>
+                </form>
+                
+                {% if uploaded_files %}
+                    <hr>
+                    <h6>已上传文件 ({{ uploaded_files|length }})</h6>
+                    <div class="row">
+                        {% for file in uploaded_files %}
+                        <div class="col-md-6 col-lg-4 file-card">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <div class="file-actions">
+                                        <a href="{{ url_for('main.delete_upload', filename=file) }}" class="btn btn-sm btn-danger" title="删除" onclick="return confirm('确定要删除此文件吗？');">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                    <div class="text-center mb-2">
+                                        {% if file.lower().endswith('.pdf') %}
+                                            <i class="bi bi-file-pdf fs-1 text-danger"></i>
+                                        {% elif file.lower().endswith(('.doc', '.docx')) %}
+                                            <i class="bi bi-file-word fs-1 text-primary"></i>
+                                        {% elif file.lower().endswith(('.ppt', '.pptx')) %}
+                                            <i class="bi bi-file-ppt fs-1 text-warning"></i>
+                                        {% elif file.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp')) %}
+                                            <i class="bi bi-file-image fs-1 text-success"></i>
+                                        {% elif file.lower().endswith(('.zip', '.rar')) %}
+                                            <i class="bi bi-file-zip fs-1 text-secondary"></i>
+                                        {% else %}
+                                            <i class="bi bi-file-earmark fs-1"></i>
+                                        {% endif %}
+                                    </div>
+                                    <p class="file-name text-center">{{ file }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="d-grid mt-3">
+                        <form action="{{ url_for('main.process_files') }}" method="post" id="process-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" id="process-button" class="btn btn-success w-100">
+                                <i class="bi bi-arrow-repeat"></i> 处理所有文件
+                            </button>
+                            <div class="form-text text-center mt-1">
+                                处理将转换所有文件为PNG格式，包括解压缩ZIP文件（不支持RAR格式）
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- 处理状态指示器 -->
+                    <div id="process-status" class="alert alert-info mt-3" style="display: none;">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">正在处理...</span>
+                            </div>
+                            <div>
+                                <p class="mb-1">文件处理中，可能需要一些时间，请稍候...</p>
+                                <small class="text-muted">处理大型文件和ZIP压缩包可能需要更长时间</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 帮助提示 -->
+                    <div class="alert alert-secondary mt-3">
+                        <h6 class="alert-heading">提示信息：</h6>
+                        <ul class="mb-0 ps-3">
+                            <li>处理将把所有文件转换为PNG格式</li>
+                            <li>ZIP压缩包会自动解压并处理其中的文件（即使没有.zip扩展名）</li>
+                            <li>目前不支持RAR格式，请使用ZIP格式压缩文件</li>
+                            <li>大型文件可能需要更长处理时间，请耐心等待</li>
+                        </ul>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 转换后文件区域 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    转换后的PNG文件
+                    <small class="text-muted ms-2">
+                        ({{ converted_files|length }}个文件)
+                    </small>
+                </h5>
+                {% if converted_files %}
+                    <div class="btn-group">
+                        <a href="{{ url_for('main.download_all_separate') }}" class="btn btn-sm btn-outline-primary">单独下载</a>
+                        <a href="{{ url_for('main.download_all') }}" class="btn btn-sm btn-primary">下载全部(ZIP)</a>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if converted_files %}
+                    <div class="row">
+                        {% for file in converted_files %}
+                        <div class="col-md-6 col-lg-4 file-card">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <a href="#" class="preview-link" data-bs-toggle="modal" data-bs-target="#imagePreviewModal" data-image-url="{{ url_for('main.preview_file', filename=file) }}" data-image-name="{{ file }}">
+                                        <div class="preview-container mb-2">
+                                            <img src="{{ url_for('main.preview_file', filename=file) }}" alt="{{ file }}" class="preview-image">
+                                        </div>
+                                    </a>
+                                    <p class="file-name text-center">{{ file }}</p>
+                                </div>
+                                <div class="card-footer">
+                                    <a href="{{ url_for('main.download_file', filename=file) }}" class="btn btn-sm btn-primary w-100">
+                                        <i class="bi bi-download"></i> 下载
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <p class="mb-0">还没有转换后的PNG文件。上传文件并点击"处理所有文件"按钮来开始转换。</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 图片预览模态框 -->
+<div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-labelledby="imagePreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imagePreviewModalLabel">图片预览</h5>
+                <div class="btn-group mx-2">
+                    <button type="button" id="zoomInButton" class="btn btn-sm btn-outline-secondary" title="放大">
+                        <i class="bi bi-zoom-in"></i>
+                    </button>
+                    <button type="button" id="zoomOutButton" class="btn btn-sm btn-outline-secondary" title="缩小">
+                        <i class="bi bi-zoom-out"></i>
+                    </button>
+                    <button type="button" id="resetZoomButton" class="btn btn-sm btn-outline-secondary" title="重置缩放">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                    <button type="button" id="toggleDragButton" class="btn btn-sm btn-outline-secondary" title="切换拖拽模式">
+                        <i class="bi bi-arrows-move"></i>
+                    </button>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="image-viewer-container">
+                    <div id="imageContainer" class="image-container">
+                        <img src="" id="previewImage" alt="预览图片">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <div>
+                    <button type="button" id="prevImageButton" class="btn btn-outline-secondary">
+                        <i class="bi bi-chevron-left"></i> 上一张
+                    </button>
+                    <button type="button" id="nextImageButton" class="btn btn-outline-secondary">
+                        下一张 <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+                <div>
+                    <a href="#" id="downloadLink" class="btn btn-primary">下载图片</a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+    .dropzone {
+        border: 2px dashed #ccc;
+        border-radius: 5px;
+        padding: 20px;
+        text-align: center;
+        cursor: pointer;
+        margin-bottom: 20px;
+    }
+    .dropzone:hover {
+        border-color: #999;
+    }
+    .preview-image {
+        max-width: 100%;
+        max-height: 150px;
+        display: block;
+        margin: 0 auto;
+    }
+    .file-card {
+        margin-bottom: 15px;
+        position: relative;
+    }
+    .file-actions {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+    }
+    .file-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    /* 图片查看器样式 */
+    .image-viewer-container {
+        position: relative;
+        height: 70vh;
+        overflow: hidden;
+        background-color: #f5f5f5;
+        background-image: linear-gradient(45deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%, #ddd),
+                        linear-gradient(45deg, #ddd 25%, transparent 25%, transparent 75%, #ddd 75%, #ddd);
+        background-size: 20px 20px;
+        background-position: 0 0, 10px 10px;
+    }
+    .image-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transform-origin: center;
+        cursor: grab;
+    }
+    .image-container.dragging {
+        cursor: grabbing;
+    }
+    .image-container.drag-mode {
+        cursor: move;
+        background-color: rgba(0, 123, 255, 0.05);
+    }
+    #previewImage {
+        max-width: 100%;
+        max-height: 100%;
+        transition: transform 0.1s ease;
+        transform-origin: center;
+        user-select: none;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 文件拖放上传
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('file-input');
+        const uploadButton = document.getElementById('upload-button');
+        const uploadForm = document.getElementById('upload-form');
+        const uploadStatus = document.getElementById('upload-status');
+        
+        // 处理表单
+        const processForm = document.getElementById('process-form');
+        const processStatus = document.getElementById('process-status');
+        
+        // 图片预览模态框
+        const previewLinks = document.querySelectorAll('.preview-link');
+        const previewModal = document.getElementById('imagePreviewModal');
+        const previewImage = document.getElementById('previewImage');
+        const downloadLink = document.getElementById('downloadLink');
+        const modalTitle = document.getElementById('imagePreviewModalLabel');
+        
+        // 图片缩放拖拽相关
+        const imageContainer = document.getElementById('imageContainer');
+        const zoomInButton = document.getElementById('zoomInButton');
+        const zoomOutButton = document.getElementById('zoomOutButton');
+        const resetZoomButton = document.getElementById('resetZoomButton');
+        const prevImageButton = document.getElementById('prevImageButton');
+        const nextImageButton = document.getElementById('nextImageButton');
+        
+        // 拖拽状态变量
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let currentX = 0;
+        let currentY = 0;
+        let currentScale = 1;
+        let dragMode = false;  // 拖拽模式状态
+        
+        // 当前查看的图片索引
+        let currentImageIndex = 0;
+        let allImages = [];
+        
+        if (dropzone) {
+            // 点击上传区域触发文件选择
+            dropzone.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            // 点击上传按钮触发文件选择
+            uploadButton.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            // 文件选择后自动提交表单
+            fileInput.addEventListener('change', function() {
+                if (fileInput.files.length > 0) {
+                    uploadStatus.style.display = 'block';
+                    uploadForm.submit();
+                }
+            });
+            
+            // 拖放事件
+            dropzone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.style.borderColor = '#007bff';
+            });
+            
+            dropzone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.style.borderColor = '#ccc';
+            });
+            
+            dropzone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.style.borderColor = '#ccc';
+                
+                if (e.dataTransfer.files.length > 0) {
+                    fileInput.files = e.dataTransfer.files;
+                    uploadStatus.style.display = 'block';
+                    uploadForm.submit();
+                }
+            });
+        }
+        
+        // 处理表单提交时显示加载状态
+        if (processForm) {
+            processForm.addEventListener('submit', function() {
+                processStatus.style.display = 'block';
+            });
+        }
+        
+        // 收集所有PNG图片信息
+        function collectAllImages() {
+            allImages = [];
+            document.querySelectorAll('.preview-link').forEach(link => {
+                allImages.push({
+                    url: link.getAttribute('data-image-url'),
+                    name: link.getAttribute('data-image-name')
+                });
+            });
+        }
+        
+        // 图片预览模态框
+        previewLinks.forEach((link, index) => {
+            link.addEventListener('click', function() {
+                collectAllImages(); // 每次打开模态框时收集所有图片
+                
+                const imageUrl = this.getAttribute('data-image-url');
+                const imageName = this.getAttribute('data-image-name');
+                
+                // 设置当前查看的图片索引
+                currentImageIndex = allImages.findIndex(img => img.url === imageUrl);
+                
+                loadImage(imageUrl, imageName);
+                resetZoom(); // 重置缩放状态
+            });
+        });
+        
+        // 加载图片
+        function loadImage(imageUrl, imageName) {
+            previewImage.src = imageUrl;
+            modalTitle.textContent = `图片预览: ${imageName}`;
+            downloadLink.href = imageUrl;
+            downloadLink.setAttribute('download', imageName);
+            
+            // 更新前后按钮状态
+            updateNavigationButtons();
+        }
+        
+        // 更新导航按钮状态
+        function updateNavigationButtons() {
+            prevImageButton.disabled = currentImageIndex <= 0;
+            nextImageButton.disabled = currentImageIndex >= allImages.length - 1;
+        }
+        
+        // 上一张图片
+        if (prevImageButton) {
+            prevImageButton.addEventListener('click', function() {
+                if (currentImageIndex > 0) {
+                    currentImageIndex--;
+                    const image = allImages[currentImageIndex];
+                    loadImage(image.url, image.name);
+                    resetZoom();
+                }
+            });
+        }
+        
+        // 下一张图片
+        if (nextImageButton) {
+            nextImageButton.addEventListener('click', function() {
+                if (currentImageIndex < allImages.length - 1) {
+                    currentImageIndex++;
+                    const image = allImages[currentImageIndex];
+                    loadImage(image.url, image.name);
+                    resetZoom();
+                }
+            });
+        }
+        
+        // 图片缩放功能
+        if (imageContainer && previewImage) {
+            // 放大按钮
+            zoomInButton.addEventListener('click', function() {
+                zoomImage(0.1);
+            });
+            
+            // 缩小按钮
+            zoomOutButton.addEventListener('click', function() {
+                zoomImage(-0.1);
+            });
+            
+            // 重置缩放按钮
+            resetZoomButton.addEventListener('click', resetZoom);
+            
+            // 切换拖拽模式按钮
+            const toggleDragButton = document.getElementById('toggleDragButton');
+            toggleDragButton.addEventListener('click', function() {
+                dragMode = !dragMode;
+                if (dragMode) {
+                    imageContainer.classList.add('drag-mode');
+                    toggleDragButton.classList.add('active');
+                } else {
+                    imageContainer.classList.remove('drag-mode');
+                    toggleDragButton.classList.remove('active');
+                }
+            });
+            
+            // 鼠标滚轮缩放
+            imageContainer.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                zoomImage(delta);
+            });
+            
+            // 点击和拖拽事件
+            imageContainer.addEventListener('mousedown', function(e) {
+                if (e.button === 0) { // 只响应左键
+                    if (dragMode) {
+                        return; // 在拖拽模式下，不需要按下鼠标来开始拖拽
+                    }
+                    isDragging = true;
+                    imageContainer.classList.add('dragging');
+                    dragStartX = e.clientX - currentX;
+                    dragStartY = e.clientY - currentY;
+                }
+            });
+            
+            // 拖拽中
+            window.addEventListener('mousemove', function(e) {
+                if (isDragging || dragMode) {
+                    currentX = e.clientX - dragStartX;
+                    currentY = e.clientY - dragStartY;
+                    updateImagePosition();
+                }
+            });
+            
+            // 拖拽结束
+            window.addEventListener('mouseup', function() {
+                if (!dragMode) {
+                    isDragging = false;
+                    imageContainer.classList.remove('dragging');
+                }
+            });
+            
+            // 在拖拽模式下单击时记录起始点
+            imageContainer.addEventListener('click', function(e) {
+                if (dragMode) {
+                    dragStartX = e.clientX - currentX;
+                    dragStartY = e.clientY - currentY;
+                }
+            });
+            
+            // 双击重置
+            imageContainer.addEventListener('dblclick', resetZoom);
+        }
+        
+        // 缩放图片
+        function zoomImage(delta) {
+            currentScale += delta;
+            // 限制缩放范围
+            currentScale = Math.max(0.1, Math.min(currentScale, 5));
+            updateImagePosition();
+        }
+        
+        // 重置缩放和位置
+        function resetZoom() {
+            currentScale = 1;
+            currentX = 0;
+            currentY = 0;
+            updateImagePosition();
+        }
+        
+        // 更新图片位置和缩放
+        function updateImagePosition() {
+            imageContainer.style.transform = `translate(${currentX}px, ${currentY}px)`;
+            previewImage.style.transform = `scale(${currentScale})`;
+        }
+        
+        // 支持键盘控制
+        if (previewModal) {
+            previewModal.addEventListener('keydown', function(e) {
+                // Esc 关闭模态框
+                if (e.key === 'Escape') {
+                    bootstrap.Modal.getInstance(previewModal).hide();
+                }
+                
+                // 空格键或回车键下载图片
+                if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    downloadLink.click();
+                }
+                
+                // 左右箭头切换图片
+                if (e.key === 'ArrowLeft' && !prevImageButton.disabled) {
+                    prevImageButton.click();
+                }
+                if (e.key === 'ArrowRight' && !nextImageButton.disabled) {
+                    nextImageButton.click();
+                }
+                
+                // +/- 或 PageUp/PageDown 进行缩放
+                if (e.key === '+' || e.key === 'PageUp') {
+                    e.preventDefault();
+                    zoomImage(0.1);
+                }
+                if (e.key === '-' || e.key === 'PageDown') {
+                    e.preventDefault();
+                    zoomImage(-0.1);
+                }
+                
+                // Home 键重置缩放
+                if (e.key === 'Home') {
+                    e.preventDefault();
+                    resetZoom();
+                }
+            });
+        }
+        
+        // 模态框关闭时重置缩放
+        if (previewModal) {
+            previewModal.addEventListener('hidden.bs.modal', resetZoom);
+        }
+    });
+</script>
+{% endblock %} 

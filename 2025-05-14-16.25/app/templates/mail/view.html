@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}查看邮件 - 文件转换工具{% endblock %}
+
+{% block styles %}
+<style>
+    .email-content {
+        border: 1px solid #e9ecef;
+        border-radius: 0.25rem;
+        padding: 1rem;
+        background-color: #f8f9fa;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    
+    .attachment-item {
+        border: 1px solid #e9ecef;
+        border-radius: 0.25rem;
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+        background-color: #f8f9fa;
+    }
+    
+    .attachment-icon {
+        font-size: 2rem;
+        margin-right: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2 class="mb-0">邮件详情</h2>
+            <div>
+                {% if not email.processed %}
+                <button type="button" class="btn btn-success assign-btn" data-email-id="{{ email.id }}">
+                    <i class="bi bi-person-check"></i> 分配任务
+                </button>
+                {% endif %}
+                <a href="{{ url_for('mail.index') }}" class="btn btn-outline-secondary ms-2">
+                    <i class="bi bi-arrow-left"></i> 返回列表
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 邮件详情 -->
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">{{ email.subject }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <p class="mb-2">
+                            <strong>发件人:</strong> 
+                            {{ email.sender }}
+                        </p>
+                        <p class="mb-2">
+                            <strong>接收时间:</strong> {{ email.received_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="mb-2">
+                            <strong>状态:</strong> 
+                            {% if email.processed %}
+                            <span class="badge bg-success">已处理</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">未处理</span>
+                            {% endif %}
+                        </p>
+                        {% if email.processed and email.processor %}
+                        <p class="mb-2">
+                            <strong>处理人:</strong> {{ email.processor.username }}
+                        </p>
+                        {% endif %}
+                        {% if email.orders %}
+                        <p class="mb-2">
+                            <strong>关联订单:</strong>
+                            {% for order in email.orders %}
+                            <a href="{{ url_for('orders.view_order', order_number=order.order_number) }}">
+                                {{ order.order_number }}
+                            </a>
+                            {% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <h6 class="mb-3">邮件内容:</h6>
+                <div class="email-content mb-4">
+                    {{ email.content|safe }}
+                </div>
+                
+                <h6 class="mb-3">附件 ({{ email.attachments|length }}个):</h6>
+                {% if email.attachments %}
+                <div class="row">
+                    {% for attachment in email.attachments %}
+                    <div class="col-md-6 mb-3">
+                        <div class="attachment-item d-flex align-items-center">
+                            <div class="attachment-icon">
+                                {% if attachment.file_type in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] %}
+                                <i class="bi bi-file-image text-success"></i>
+                                {% elif attachment.file_type in ['pdf'] %}
+                                <i class="bi bi-file-pdf text-danger"></i>
+                                {% elif attachment.file_type in ['doc', 'docx'] %}
+                                <i class="bi bi-file-word text-primary"></i>
+                                {% elif attachment.file_type in ['xls', 'xlsx'] %}
+                                <i class="bi bi-file-excel text-success"></i>
+                                {% elif attachment.file_type in ['ppt', 'pptx'] %}
+                                <i class="bi bi-file-ppt text-warning"></i>
+                                {% elif attachment.file_type in ['zip', 'rar', '7z'] %}
+                                <i class="bi bi-file-zip text-secondary"></i>
+                                {% else %}
+                                <i class="bi bi-file-earmark text-info"></i>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <p class="mb-1 fw-bold">{{ attachment.filename }}</p>
+                                <p class="mb-0 small text-muted">
+                                    {{ attachment.file_type|upper }}
+                                    {% if attachment.file_size %}
+                                    - {{ (attachment.file_size / 1024)|round(1) }} KB
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <p class="mb-0">该邮件没有附件</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 分配邮件任务的模态框 -->
+<div class="modal fade" id="assignModal" tabindex="-1" aria-labelledby="assignModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="assignModalLabel">分配邮件任务</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="assignForm">
+                    <input type="hidden" id="emailId" name="email_id" value="{{ email.id }}">
+                    <div class="mb-3">
+                        <label for="userId" class="form-label">选择处理人</label>
+                        <select class="form-select" id="userId" name="user_id" required>
+                            <option value="">请选择...</option>
+                            {% for user in users %}
+                            <option value="{{ user.id }}">{{ user.username }} ({{ "管理员" if user.is_admin else "普通用户" }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="note" class="form-label">备注（可选）</label>
+                        <textarea class="form-control" id="note" name="note" rows="3" placeholder="可以添加订单备注信息"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmAssign">确认分配</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 分配邮件任务
+        const assignModal = new bootstrap.Modal(document.getElementById('assignModal'));
+        
+        // 点击分配按钮
+        document.querySelectorAll('.assign-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                assignModal.show();
+            });
+        });
+        
+        // 确认分配
+        document.getElementById('confirmAssign').addEventListener('click', function() {
+            const form = document.getElementById('assignForm');
+            const formData = new FormData(form);
+            
+            if (!formData.get('user_id')) {
+                alert('请选择处理人');
+                return;
+            }
+            
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 处理中...';
+            
+            fetch('{{ url_for("mail.assign_email") }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.href = '{{ url_for("mail.index") }}';
+                } else {
+                    alert('分配任务失败: ' + data.message);
+                    this.disabled = false;
+                    this.innerHTML = '确认分配';
+                }
+            })
+            .catch(error => {
+                alert('分配任务时出错，请重试');
+                console.error('Error:', error);
+                this.disabled = false;
+                this.innerHTML = '确认分配';
+            });
+        });
+    });
+</script>
+{% endblock %} 

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}错误 - 文件转换工具{% endblock %}
+
+{% block content %}
+<div class="alert alert-danger">
+    <h4 class="alert-heading">出错了！</h4>
+    <p>{{ message }}</p>
+    <hr>
+    <p class="mb-0">
+        <a href="{{ url_for('main.index') }}" class="btn btn-outline-danger">
+            <i class="bi bi-arrow-left"></i> 返回首页
+        </a>
+        <a href="{{ url_for('orders.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-card-list"></i> 查看所有订单
+        </a>
+    </p>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">可能的解决方法</h5>
+    </div>
+    <div class="card-body">
+        <ul>
+            <li>检查您要访问的文件是否存在</li>
+            <li>原始文件可能已被删除或移动</li>
+            <li>尝试重新上传并处理文件</li>
+            <li>如果您在使用回滚功能，尝试回滚到其他订单</li>
+        </ul>
+    </div>
+</div>
+{% endblock %} 

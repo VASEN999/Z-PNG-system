@@ -1,0 +1,965 @@
+{% extends "base.html" %}
+
+{% block title %}订单 #{{ order.order_number }} - 文件转换工具{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">
+                {% if order.status == order.STATUS_PENDING %}
+                <span class="badge bg-warning me-1">待处理</span>
+                {% elif order.status == order.STATUS_MATERIAL %}
+                <span class="badge bg-danger me-1">补材料</span>
+                {% elif order.status == order.STATUS_REVIEWED %}
+                <span class="badge bg-success me-1">已审核</span>
+                {% endif %}
+                订单详情 #{{ order.order_number }}
+            </h4>
+            <div>
+                <a href="{{ url_for('orders.index') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> 返回订单列表
+                </a>
+                {% if can_activate %}
+                <form action="{{ url_for('orders.activate_order', order_number=order.order_number) }}" method="post" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('确定要回滚到此订单吗？这将恢复该订单的所有文件并替换当前工作环境！');">
+                        <i class="bi bi-arrow-counterclockwise"></i> 回滚到此订单
+                    </button>
+                </form>
+                {% endif %}
+                
+                <!-- 只有管理员可见的转交按钮 -->
+                {% if current_user.is_admin %}
+                <button type="button" class="btn btn-sm btn-warning ms-1" id="transferOrderBtn">
+                    <i class="bi bi-arrow-right-circle"></i> 转交订单
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 主内容区域 - 左侧PNG池，右侧订单信息和文件上传 -->
+    <div class="col-md-8">
+        <!-- PNG池 -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">PNG文件池 ({{ converted_files|length }})</h5>
+                {% if is_active_order and converted_files %}
+                <div>
+                    <a href="{{ url_for('main.download_all') }}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-download"></i> 下载全部
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if converted_files %}
+                <div class="row">
+                    {% for file in converted_files %}
+                    <div class="col-md-3 col-sm-4 col-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body p-2 text-center">
+                                <a href="javascript:void(0);" class="preview-link" data-toggle="modal" data-target="#imagePreviewModal" data-image-url="{{ url_for('main.preview_file', filename=file, order_id=order.id, order_number=order.order_number) }}" data-image-name="{{ file }}">
+                                    <img src="{{ url_for('main.preview_file', filename=file, order_id=order.id, order_number=order.order_number) }}" alt="{{ file }}" class="img-fluid mb-2" style="max-height: 120px; border-radius: 5px;" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'text-center py-3 text-warning\'><i class=\'bi bi-exclamation-triangle\' style=\'font-size: 3rem;\'></i><p class=\'small mt-2\'>文件可能已被移动或删除</p></div>';">
+                                </a>
+                                <p class="small text-truncate mb-0" title="{{ file }}">{{ file }}</p>
+                            </div>
+                            <div class="card-footer p-1">
+                                <a href="{{ url_for('main.download_file', filename=file, order_id=order.id, order_number=order.order_number) }}" class="btn btn-sm btn-outline-primary w-100">
+                                    <i class="bi bi-download"></i> 下载
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% elif is_active_order %}
+                <div class="alert alert-info">
+                    <p class="mb-0">还没有PNG文件。上传文件并点击处理按钮开始转换。</p>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <p class="mb-0">此订单未激活。请点击"回滚到此订单"按钮激活订单后查看文件。</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if is_active_order %}
+        <!-- 文件上传区域 -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">文件上传区域</h5>
+                {% if order.files %}
+                <div>
+                    <form action="{{ url_for('main.process_files') }}" method="post" id="process-form" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-success">
+                            <i class="bi bi-gear"></i> 处理所有文件
+                        </button>
+                    </form>
+                    <form action="{{ url_for('main.clear_png_cache') }}" method="post" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定要清空PNG池吗？这将删除所有转换后的PNG文件，但保留原始上传文件。您可以点击\'处理所有文件\'重新生成PNG文件。');">
+                            <i class="bi bi-trash"></i> 清空PNG池
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('main.upload_file') }}" method="post" enctype="multipart/form-data" id="upload-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="dropzone" id="dropzone" style="border: 2px dashed #ccc; border-radius: 5px; padding: 25px; text-align: center; cursor: pointer;">
+                        <i class="bi bi-cloud-upload fs-1"></i>
+                        <p>拖放文件至此处上传，或点击选择文件</p>
+                        <p class="text-muted small">支持PDF、Word、PPT、图片和ZIP压缩包等多种格式</p>
+                        <input type="file" name="files[]" id="file-input" multiple style="display: none;">
+                    </div>
+                    <div class="d-grid mt-3">
+                        <button type="button" id="upload-button" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> 上传文件
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- 上传状态指示器 -->
+                <div id="upload-status" class="alert alert-info mt-3" style="display: none;">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2" role="status">
+                            <span class="visually-hidden">正在上传...</span>
+                        </div>
+                        <div>文件上传中，请稍候...</div>
+                    </div>
+                </div>
+                
+                <!-- 处理状态指示器 -->
+                <div id="process-status" class="alert alert-info mt-3" style="display: none;">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2" role="status">
+                            <span class="visually-hidden">正在处理...</span>
+                        </div>
+                        <div>文件处理中，请稍候...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-md-4">
+        <!-- 订单基本信息 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">基本信息</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <th style="width: 30%">订单号</th>
+                        <td>{{ order.order_number }}</td>
+                    </tr>
+                    <tr>
+                        <th>创建时间</th>
+                        <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    </tr>
+                    <tr>
+                        <th>更新时间</th>
+                        <td>{{ order.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    </tr>
+                    <tr>
+                        <th>创建者</th>
+                        <td>
+                            {% if order.user %}
+                            {{ order.user.username }}
+                            {% if order.user.is_admin %}<span class="badge bg-danger">管理员</span>{% endif %}
+                            {% else %}
+                            <span class="text-muted">未知</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <!-- 添加合并信息行 -->
+                    {% if order.is_merged %}
+                    <tr>
+                        <th>合并信息</th>
+                        <td>
+                            <span class="badge bg-info">合并订单</span>
+                            <div class="mt-2">
+                                <small class="text-muted">合并自以下订单：</small>
+                                <ul class="list-unstyled ms-2 mt-1">
+                                    {% if order.merged_from %}
+                                        {% for source_number in order.merged_from.split(',') %}
+                                            <li>
+                                                <small>
+                                                    <a href="{{ url_for('orders.view_order', order_number=source_number) }}" class="text-decoration-none">
+                                                        <i class="bi bi-box"></i> {{ source_number }}
+                                                    </a>
+                                                </small>
+                                            </li>
+                                        {% endfor %}
+                                    {% endif %}
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <th>状态</th>
+                        <td>
+                            {% if order.status == order.STATUS_PENDING %}
+                            <span class="badge bg-warning">{{ order.status_display }}</span>
+                            {% elif order.status == order.STATUS_MATERIAL %}
+                            <span class="badge bg-info">{{ order.status_display }}</span>
+                            {% elif order.status == order.STATUS_REVIEWED %}
+                            <span class="badge bg-success">{{ order.status_display }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ order.status_display }}</span>
+                            {% endif %}
+                            
+                            {% if order.is_active %}
+                            <span class="badge bg-primary">活跃</span>
+                            {% endif %}
+                            
+                            <!-- 状态变更按钮组 -->
+                            <div class="mt-2">
+                                <div class="d-flex align-items-center">
+                                    <form action="{{ url_for('orders.update_status', order_number=order.order_number) }}" method="post" class="d-inline status-form">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <div class="btn-group btn-group-sm shadow-sm">
+                                            <button type="button" data-status="{{ order.STATUS_PENDING }}" class="btn btn-outline-warning status-btn {% if order.status == order.STATUS_PENDING %}active{% endif %}">
+                                                <i class="bi bi-hourglass me-1"></i> 待处理
+                                            </button>
+                                            <button type="button" data-status="{{ order.STATUS_MATERIAL }}" class="btn btn-outline-danger status-btn {% if order.status == order.STATUS_MATERIAL %}active{% endif %}">
+                                                <i class="bi bi-file-earmark-plus me-1"></i> 补材料
+                                            </button>
+                                            <button type="button" data-status="{{ order.STATUS_REVIEWED }}" class="btn btn-outline-success status-btn {% if order.status == order.STATUS_REVIEWED %}active{% endif %}">
+                                                <i class="bi bi-check-circle me-1"></i> 已审核
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr id="editNote">
+                        <th>备注</th>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div id="noteDisplay" class="text-wrap text-break" style="max-width: 300px; max-height: 80px; overflow: auto;" title="{{ order.note }}">{{ order.note or '-' }}</div>
+                                <button type="button" class="btn btn-sm btn-outline-primary ms-2" id="editNoteBtn">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                            </div>
+                            
+                            <div id="noteEditForm" style="display: none;" class="mt-2">
+                                <form action="{{ url_for('orders.update_note', order_number=order.order_number) }}" method="post" id="noteForm">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="form-group">
+                                        <textarea name="note" class="form-control form-control-sm" rows="3">{{ order.note or '' }}</textarea>
+                                    </div>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-primary" id="saveNoteBtn">保存</button>
+                                        <button type="button" class="btn btn-sm btn-secondary ms-1" id="cancelEditBtn">取消</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>上传文件</th>
+                        <td>{{ order.files|length }} 个</td>
+                    </tr>
+                    <tr>
+                        <th>转换文件</th>
+                        <td>{{ order.conversions|length }} 个</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 上传文件列表 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">数据库文件记录 ({{ order.files|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if order.files %}
+                <div class="list-group">
+                    {% for file in order.files %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ file.original_filename }}</h6>
+                            <small>{{ file.upload_time.strftime('%m-%d %H:%M') }}</small>
+                        </div>
+                        <p class="mb-1 small text-muted">
+                            类型: {{ file.file_type or '未知' }} | 
+                            大小: {{ file.file_size|filesizeformat if file.file_size else 'N/A' }}
+                        </p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info mb-0">
+                    <p class="mb-0">没有上传文件记录</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 图片预览模态框 -->
+<div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-labelledby="imagePreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imagePreviewModalLabel">图片预览</h5>
+                <div class="btn-group mx-2">
+                    <button type="button" id="prevImageButton" class="btn btn-sm btn-outline-secondary" title="上一张图片">
+                        <i class="bi bi-arrow-left"></i>
+                    </button>
+                    <button type="button" id="nextImageButton" class="btn btn-sm btn-outline-secondary" title="下一张图片">
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+                    <button type="button" id="zoomInButton" class="btn btn-sm btn-outline-secondary" title="放大">
+                        <i class="bi bi-zoom-in"></i>
+                    </button>
+                    <button type="button" id="zoomOutButton" class="btn btn-sm btn-outline-secondary" title="缩小">
+                        <i class="bi bi-zoom-out"></i>
+                    </button>
+                    <button type="button" id="resetZoomButton" class="btn btn-sm btn-outline-secondary" title="重置缩放">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                </div>
+                <div class="modal-page-info ms-2 me-auto">
+                    <span id="currentImageIndex">1</span>/<span id="totalImages">1</span>
+                </div>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="imageContainer" class="text-center" style="overflow: hidden; position: relative; height: 70vh; background-color: #f8f9fa;">
+                    <img id="previewImage" src="" alt="预览图片" style="max-height: 100%; max-width: 100%; transition: transform 0.2s; cursor: grab;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="text-muted small me-auto">
+                    <i class="bi bi-info-circle"></i> 提示：滚轮可缩放，左键拖动可移动图片，左右箭头键或按钮可切换图片
+                </div>
+                <a id="downloadLink" href="#" class="btn btn-primary" download>
+                    <i class="bi bi-download"></i> 下载图片
+                </a>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 转交订单模态窗口，直接放在content块内 -->
+{% if current_user.is_admin %}
+<div class="modal fade" id="transferModal" tabindex="-1" aria-labelledby="transferModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="transferModalLabel">转交订单</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="transferForm">
+                    <input type="hidden" id="orderNumber" value="{{ order.order_number }}">
+                    <div class="mb-3">
+                        <label for="targetUserId" class="form-label">选择目标用户</label>
+                        <select class="form-select" id="targetUserId" name="target_user_id" required>
+                            <option value="">请选择...</option>
+                            {% for user in all_users %}
+                            <option value="{{ user.id }}" {% if user.id == order.user_id %}disabled{% endif %}>
+                                {{ user.username }} ({{ "管理员" if user.is_admin else "普通用户" }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="transferNote" class="form-label">转交备注（可选）</label>
+                        <textarea class="form-control" id="transferNote" name="note" rows="3" placeholder="可以添加转交原因或其他说明"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmTransfer">确认转交</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block modals %}
+{{ super() }}
+<!-- 移除这里的转交订单模态窗口，已移到content块 -->
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 初始化所有模态窗口
+        $(document).ready(function() {
+            // 使用正确的Bootstrap 4语法初始化模态窗口
+            $('.modal').modal({
+                backdrop: true,
+                keyboard: true,
+                focus: true,
+                show: false
+            });
+            
+            // 添加模态框关闭事件监听器（正确的Bootstrap 4事件名称）
+            $('#imagePreviewModal').on('hidden.bs.modal', function() {
+                isDragging = false;
+                previewImage.style.cursor = 'grab';
+            });
+            
+            console.log('模态窗口初始化完成');
+            
+            // 给转交订单按钮添加独立的初始化逻辑
+            $('#transferOrderBtn').on('click', function() {
+                console.log('页面加载完毕后重新绑定的点击事件');
+                if($('#transferModal').length) {
+                    $('#transferModal').modal('show');
+                } else {
+                    console.error('找不到转交模态窗口!');
+                    alert('系统错误：找不到转交模态窗口，请刷新页面重试');
+                }
+            });
+            
+            // 确认转交按钮事件绑定
+            $('#confirmTransfer').on('click', function() {
+                console.log('点击了确认转交按钮');
+                const orderNumber = $('#orderNumber').val();
+                const targetUserId = $('#targetUserId').val();
+                const note = $('#transferNote').val();
+                
+                console.log('转交信息:', orderNumber, targetUserId, note);
+                
+                // 验证选择
+                if (!targetUserId) {
+                    alert('请选择目标用户');
+                    return;
+                }
+                
+                // 询问确认
+                if (!confirm('确定要将此订单转交给选定的用户吗？如果订单当前是活跃状态，转交后将变为非活跃状态。')) {
+                    return;
+                }
+                
+                // 发送转交请求
+                const formData = new FormData();
+                formData.append('target_user_id', targetUserId);
+                formData.append('note', note);
+                formData.append('csrf_token', '{{ csrf_token() }}');
+                
+                fetch(`/orders/transfer/${orderNumber}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('转交响应:', data);
+                    // 使用jQuery关闭模态窗口
+                    $('#transferModal').modal('hide');
+                    
+                    if (data.success) {
+                        alert(data.message);
+                        // 刷新页面以显示更新
+                        window.location.href = '/orders';
+                    } else {
+                        alert('转交失败: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('请求失败:', error);
+                    alert('请求失败，请稍后重试');
+                });
+            });
+        });
+        
+        // 状态变更功能
+        console.log('DOM加载完成，初始化状态变更功能');
+        const statusForm = document.querySelector('.status-form');
+        const statusButtons = document.querySelectorAll('.status-btn');
+        
+        // 直接给每个状态按钮添加点击事件
+        document.querySelectorAll('.status-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const clickedStatus = this.getAttribute('data-status');
+                
+                if (!statusForm) {
+                    alert('状态更新失败：系统错误，未找到提交表单');
+                    return;
+                }
+                
+                // 创建表单数据
+                const formData = new FormData(statusForm);
+                formData.set('status', clickedStatus);
+                
+                // 显示加载状态
+                const originalText = this.textContent.trim();
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+                this.disabled = true;
+                
+                // 禁用所有状态按钮
+                document.querySelectorAll('.status-btn').forEach(btn => {
+                    btn.disabled = true;
+                });
+                
+                // 发送AJAX请求
+                fetch(statusForm.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('服务器错误: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // 更新按钮状态
+                        document.querySelectorAll('.status-btn').forEach(btn => {
+                            btn.classList.remove('active');
+                        });
+                        this.classList.add('active');
+                        
+                        // 记录当前状态 - 用于调试
+                        console.log('状态变更为:', clickedStatus);
+                        
+                        // 更新所有状态相关的徽章 - 使用更通用的选择器
+                        // 1. 首先更新所有表格中的状态徽章
+                        document.querySelectorAll('table .badge').forEach(badge => {
+                            // 跳过"活跃"和"管理员"标签
+                            if (badge.textContent.trim() === '活跃' || badge.textContent.trim() === '管理员') {
+                                return;
+                            }
+                            
+                            // 重置所有可能的徽章类
+                            badge.className = 'badge';  // 先重置为基本徽章类
+                            
+                            // 添加新状态类和文本
+                            updateBadgeStatus(badge, clickedStatus);
+                        });
+                        
+                        // 2. 更新页面标题处的状态徽章
+                        const titleBadge = document.querySelector('h4 .badge');
+                        if (titleBadge) {
+                            titleBadge.className = 'badge me-1';
+                            updateBadgeStatus(titleBadge, clickedStatus);
+                        }
+                        
+                        // 成功时不显示提醒
+                    } else {
+                        alert('状态更新失败: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    alert('请求发生错误，请重试');
+                })
+                .finally(() => {
+                    // 恢复按钮文本和状态
+                    this.textContent = originalText;
+                    document.querySelectorAll('.status-btn').forEach(btn => {
+                        btn.disabled = false;
+                    });
+                });
+            });
+        });
+        
+        // 辅助函数：根据状态更新徽章
+        function updateBadgeStatus(badge, status) {
+            if (status === 'pending') {
+                badge.classList.add('bg-warning');
+                badge.textContent = '待处理';
+            } else if (status === 'material') {
+                badge.classList.add('bg-danger');
+                badge.textContent = '补材料';
+            } else if (status === 'reviewed') {
+                badge.classList.add('bg-success');
+                badge.textContent = '已审核';
+            }
+        }
+        
+        // 文件上传相关
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('file-input');
+        const uploadButton = document.getElementById('upload-button');
+        const uploadForm = document.getElementById('upload-form');
+        const uploadStatus = document.getElementById('upload-status');
+        
+        // 处理表单
+        const processForm = document.getElementById('process-form');
+        const processStatus = document.getElementById('process-status');
+        
+        // 备注编辑功能
+        const editNoteBtn = document.getElementById('editNoteBtn');
+        const noteDisplay = document.getElementById('noteDisplay');
+        const noteEditForm = document.getElementById('noteEditForm');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        const saveNoteBtn = document.getElementById('saveNoteBtn');
+        const noteForm = document.getElementById('noteForm');
+        
+        console.log('备注编辑组件:', 
+            '编辑按钮-', editNoteBtn ? '已找到' : '未找到', 
+            '显示区域-', noteDisplay ? '已找到' : '未找到',  
+            '编辑表单-', noteEditForm ? '已找到' : '未找到', 
+            '保存按钮-', saveNoteBtn ? '已找到' : '未找到',
+            '取消按钮-', cancelEditBtn ? '已找到' : '未找到'
+        );
+        
+        // 确保备注编辑按钮正常工作
+        if (editNoteBtn) {
+            editNoteBtn.addEventListener('click', function() {
+                console.log('点击了备注编辑按钮');
+                if(noteDisplay) noteDisplay.style.display = 'none';
+                if(editNoteBtn) editNoteBtn.style.display = 'none';
+                if(noteEditForm) noteEditForm.style.display = 'block';
+            });
+        }
+        
+        // 确保保存按钮正常工作
+        if (saveNoteBtn && noteForm) {
+            saveNoteBtn.addEventListener('click', function() {
+                console.log('点击了保存按钮');
+                
+                // 显示加载状态
+                saveNoteBtn.disabled = true;
+                saveNoteBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 保存中...';
+                
+                // 获取表单数据
+                const formData = new FormData(noteForm);
+                
+                // 发送AJAX请求
+                fetch(noteForm.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('服务器错误: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('备注更新响应:', data);
+                    
+                    if (data.success) {
+                        // 更新显示区域
+                        if (noteDisplay) {
+                            noteDisplay.textContent = data.new_note;
+                        }
+                        
+                        // 隐藏编辑表单，显示备注和编辑按钮
+                        if(noteDisplay) noteDisplay.style.display = 'block';
+                        if(editNoteBtn) editNoteBtn.style.display = 'inline-block';
+                        if(noteEditForm) noteEditForm.style.display = 'none';
+                    } else {
+                        alert('保存备注失败: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('请求错误:', error);
+                    alert('保存备注时发生错误，请重试');
+                })
+                .finally(() => {
+                    // 恢复按钮状态
+                    saveNoteBtn.disabled = false;
+                    saveNoteBtn.innerHTML = '保存';
+                });
+            });
+        }
+        
+        // 确保取消按钮正常工作
+        if (cancelEditBtn) {
+            cancelEditBtn.addEventListener('click', function() {
+                console.log('点击了取消按钮');
+                if(noteDisplay) noteDisplay.style.display = 'block';
+                if(editNoteBtn) editNoteBtn.style.display = 'inline-block';
+                if(noteEditForm) noteEditForm.style.display = 'none';
+            });
+        }
+        
+        // 图片预览功能 - 增强版
+        const previewLinks = document.querySelectorAll('.preview-link');
+        const previewModal = document.getElementById('imagePreviewModal');
+        const previewImage = document.getElementById('previewImage');
+        const downloadLink = document.getElementById('downloadLink');
+        const modalTitle = document.getElementById('imagePreviewModalLabel');
+        const imageContainer = document.getElementById('imageContainer');
+        
+        // 图片导航按钮
+        const prevImageButton = document.getElementById('prevImageButton');
+        const nextImageButton = document.getElementById('nextImageButton');
+        const currentImageIndexElement = document.getElementById('currentImageIndex');
+        const totalImagesElement = document.getElementById('totalImages');
+        
+        // 图片缩放按钮
+        const zoomInButton = document.getElementById('zoomInButton');
+        const zoomOutButton = document.getElementById('zoomOutButton');
+        const resetZoomButton = document.getElementById('resetZoomButton');
+        
+        // 全局变量
+        let currentScale = 1;
+        let translateX = 0;
+        let translateY = 0;
+        let isDragging = false;
+        let startX, startY;
+        let allImages = [];
+        let currentImageIndex = 0;
+        
+        // 收集所有图片URL和名称
+        if (previewLinks && previewLinks.length > 0) {
+            previewLinks.forEach(link => {
+                allImages.push({
+                    url: link.getAttribute('data-image-url'),
+                    name: link.getAttribute('data-image-name')
+                });
+            });
+            
+            // 更新总图片数
+            if (totalImagesElement) {
+                totalImagesElement.textContent = allImages.length;
+            }
+            
+            // 图片预览点击事件
+            previewLinks.forEach((link, index) => {
+                link.addEventListener('click', function() {
+                    currentImageIndex = index;
+                    showCurrentImage();
+                });
+            });
+        }
+        
+        // 显示当前图片
+        function showCurrentImage() {
+            if (allImages.length === 0) return;
+            
+            const currentImage = allImages[currentImageIndex];
+            previewImage.src = currentImage.url;
+            modalTitle.textContent = `图片预览: ${currentImage.name}`;
+            downloadLink.href = currentImage.url;
+            downloadLink.setAttribute('download', currentImage.name);
+            
+            // 更新导航信息
+            if (currentImageIndexElement) {
+                currentImageIndexElement.textContent = currentImageIndex + 1;
+            }
+            
+            // 重置缩放和位置
+            resetImageTransform();
+        }
+        
+        // 图片导航功能
+        if (prevImageButton && nextImageButton) {
+            // 上一张图片
+            prevImageButton.addEventListener('click', function() {
+                if (allImages.length === 0) return;
+                currentImageIndex = (currentImageIndex - 1 + allImages.length) % allImages.length;
+                showCurrentImage();
+            });
+            
+            // 下一张图片
+            nextImageButton.addEventListener('click', function() {
+                if (allImages.length === 0) return;
+                currentImageIndex = (currentImageIndex + 1) % allImages.length;
+                showCurrentImage();
+            });
+        }
+        
+        // 键盘导航
+        document.addEventListener('keydown', function(e) {
+            // 只有当模态框显示时才处理键盘事件
+            if (!previewModal.classList.contains('show')) return;
+            
+            if (e.key === 'ArrowLeft') {
+                // 左箭头 - 上一张图片
+                if (prevImageButton) prevImageButton.click();
+                e.preventDefault();
+            } else if (e.key === 'ArrowRight') {
+                // 右箭头 - 下一张图片
+                if (nextImageButton) nextImageButton.click();
+                e.preventDefault();
+            } else if (e.key === 'Escape') {
+                // ESC键 - 关闭模态框
+                const closeButton = previewModal.querySelector('.close');
+                if (closeButton) closeButton.click();
+                e.preventDefault();
+            }
+        });
+        
+        // 图片缩放功能
+        if (zoomInButton && zoomOutButton && resetZoomButton) {
+            // 放大
+            zoomInButton.addEventListener('click', function() {
+                currentScale += 0.2;
+                updateImageTransform();
+            });
+            
+            // 缩小
+            zoomOutButton.addEventListener('click', function() {
+                currentScale = Math.max(0.2, currentScale - 0.2);
+                updateImageTransform();
+            });
+            
+            // 重置
+            resetZoomButton.addEventListener('click', resetImageTransform);
+        }
+        
+        // 鼠标滚轮缩放
+        if (imageContainer) {
+            imageContainer.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                
+                const delta = e.deltaY || e.detail || e.wheelDelta;
+                
+                // 计算鼠标指针相对于图片的位置
+                const rect = previewImage.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                // 缩放前的图片位置和大小
+                const oldScale = currentScale;
+                
+                // 调整缩放比例
+                if (delta > 0) {
+                    // 向下滚动 - 缩小
+                    currentScale = Math.max(0.2, currentScale - 0.1);
+                } else {
+                    // 向上滚动 - 放大
+                    currentScale += 0.1;
+                }
+                
+                // 计算缩放后保持鼠标位置不变所需的平移调整
+                if (oldScale !== currentScale) {
+                    // 计算缩放因子
+                    const factor = currentScale / oldScale;
+                    
+                    // 计算鼠标位置相对于图片中心的偏移
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    const relativeX = mouseX - centerX;
+                    const relativeY = mouseY - centerY;
+                    
+                    // 计算新的平移值，让鼠标下的点保持不变
+                    translateX = translateX + relativeX * (1 - factor);
+                    translateY = translateY + relativeY * (1 - factor);
+                    
+                    updateImageTransform();
+                }
+            }, { passive: false });
+        }
+        
+        // 图片拖拽功能
+        if (previewImage && imageContainer) {
+            // 开始拖拽
+            previewImage.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                isDragging = true;
+                startX = e.clientX - translateX;
+                startY = e.clientY - translateY;
+                previewImage.style.cursor = 'grabbing';
+            });
+            
+            // 拖拽中
+            window.addEventListener('mousemove', function(e) {
+                if (!isDragging) return;
+                e.preventDefault();
+                translateX = e.clientX - startX;
+                translateY = e.clientY - startY;
+                updateImageTransform();
+            });
+            
+            // 结束拖拽
+            window.addEventListener('mouseup', function() {
+                if (!isDragging) return;
+                isDragging = false;
+                previewImage.style.cursor = 'grab';
+            });
+        }
+        
+        // 更新图片变换
+        function updateImageTransform() {
+            previewImage.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
+        }
+        
+        // 重置图片变换
+        function resetImageTransform() {
+            currentScale = 1;
+            translateX = 0;
+            translateY = 0;
+            updateImageTransform();
+        }
+        
+        // 文件上传相关代码
+        if (dropzone && fileInput && uploadButton) {
+            // 点击上传区域触发文件选择
+            dropzone.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            // 点击上传按钮触发文件选择
+            uploadButton.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            // 文件选择后自动提交表单
+            fileInput.addEventListener('change', function() {
+                if (fileInput.files.length > 0) {
+                    uploadStatus.style.display = 'block';
+                    uploadForm.submit();
+                }
+            });
+            
+            // 拖放事件
+            dropzone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.style.borderColor = '#007bff';
+            });
+            
+            dropzone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.style.borderColor = '#ccc';
+            });
+            
+            dropzone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.style.borderColor = '#ccc';
+                
+                if (e.dataTransfer.files.length > 0) {
+                    fileInput.files = e.dataTransfer.files;
+                    uploadStatus.style.display = 'block';
+                    uploadForm.submit();
+                }
+            });
+        }
+        
+        // 处理表单提交时显示加载状态
+        if (processForm) {
+            processForm.addEventListener('submit', function() {
+                processStatus.style.display = 'block';
+            });
+        }
+    });
+</script>
+{% endblock %} 

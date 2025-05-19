@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}添加用户 - 文件转换工具{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">添加新用户</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('admin.add_user') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">用户名 <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control" id="username" name="username" required>
+                        </div>
+                        <div class="form-text">登录用的唯一标识符，创建后不可修改</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">密码 <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        <div class="form-text">建议使用8位以上密码，包含字母、数字和特殊字符</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">确认密码 <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                            <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="full_name" class="form-label">姓名</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person-vcard"></i></span>
+                            <input type="text" class="form-control" id="full_name" name="full_name">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">邮箱</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                            <input type="email" class="form-control" id="email" name="email">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">用户角色</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="is_admin" id="role_user" value="no" checked>
+                            <label class="form-check-label" for="role_user">
+                                普通用户
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="is_admin" id="role_admin" value="yes">
+                            <label class="form-check-label" for="role_admin">
+                                管理员用户
+                            </label>
+                        </div>
+                        <div class="form-text text-warning">请谨慎授予管理员权限，管理员可以访问所有功能！</div>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-person-plus me-1"></i> 创建用户
+                        </button>
+                        <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-1"></i> 返回用户列表
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

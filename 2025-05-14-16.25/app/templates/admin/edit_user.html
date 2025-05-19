@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}编辑用户 - 文件转换工具{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">编辑用户: {{ user.username }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('admin.edit_user', user_id=user.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">用户名</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control" id="username" value="{{ user.username }}" readonly disabled>
+                        </div>
+                        <div class="form-text">用户名不可修改</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="new_password" class="form-label">新密码</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                            <input type="password" class="form-control" id="new_password" name="new_password">
+                        </div>
+                        <div class="form-text">如不修改密码请留空</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">确认新密码</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                            <input type="password" class="form-control" id="confirm_password" name="confirm_password">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="full_name" class="form-label">姓名</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person-vcard"></i></span>
+                            <input type="text" class="form-control" id="full_name" name="full_name" value="{{ user.full_name or '' }}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">邮箱</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                            <input type="email" class="form-control" id="email" name="email" value="{{ user.email or '' }}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">账户状态</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="is_active" id="status_active" value="yes" {% if user.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="status_active">
+                                正常
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="is_active" id="status_inactive" value="no" {% if not user.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="status_inactive">
+                                禁用
+                            </label>
+                        </div>
+                    </div>
+                    
+                    {% if not admin_self %}
+                    <div class="mb-3">
+                        <label class="form-label">用户角色</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="is_admin" id="role_user" value="no" {% if not user.is_admin %}checked{% endif %}>
+                            <label class="form-check-label" for="role_user">
+                                普通用户
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="is_admin" id="role_admin" value="yes" {% if user.is_admin %}checked{% endif %}>
+                            <label class="form-check-label" for="role_admin">
+                                管理员用户
+                            </label>
+                        </div>
+                        <div class="form-text text-warning">请谨慎授予管理员权限，管理员可以访问所有功能！</div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 您不能修改自己的管理员权限
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-1"></i> 保存修改
+                        </button>
+                        <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-1"></i> 返回用户列表
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

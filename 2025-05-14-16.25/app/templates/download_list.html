@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件下载列表</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .download-item {
+            margin-bottom: 15px;
+        }
+        .preview-container {
+            position: relative;
+            max-height: 150px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .preview-image {
+            max-height: 150px;
+            max-width: 100%;
+        }
+        .download-all-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>PNG文件下载列表</h1>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-primary">返回主页</a>
+        </div>
+        
+        <div class="alert alert-info mb-4">
+            <p class="mb-1">共找到 <strong>{{ files|length }}</strong> 个PNG文件可供下载。</p>
+            <p class="mb-0">点击每个文件下方的"下载"按钮即可下载单个文件。您可以按住Ctrl键点击多个文件同时下载。</p>
+            <hr>
+            <div class="d-flex">
+                <button id="select-all-btn" class="btn btn-sm btn-outline-primary me-2">全选</button>
+                <button id="select-none-btn" class="btn btn-sm btn-outline-secondary me-2">取消全选</button>
+                <button id="download-selected-btn" class="btn btn-sm btn-success me-2">下载选中文件</button>
+                <button id="download-all-btn" class="btn btn-sm btn-primary ms-auto">一键下载全部</button>
+            </div>
+        </div>
+        
+        {% if files %}
+            <div class="row">
+                {% for file in files %}
+                <div class="col-md-3 col-sm-4 col-6 download-item">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input file-checkbox" type="checkbox" value="{{ file.url }}" id="check-{{ loop.index }}">
+                                <label class="form-check-label" for="check-{{ loop.index }}">
+                                    选择
+                                </label>
+                            </div>
+                            <div class="preview-container">
+                                <a href="#" class="preview-link" data-bs-toggle="modal" data-bs-target="#imagePreviewModal" data-image-url="{{ file.url }}" data-image-name="{{ file.name }}">
+                                    <img src="{{ file.url }}" alt="{{ file.name }}" class="preview-image">
+                                </a>
+                            </div>
+                            <p class="text-center small text-truncate" title="{{ file.name }}">{{ file.name }}</p>
+                            <div class="d-grid">
+                                <a href="{{ file.url }}" download class="btn btn-sm btn-primary">下载</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-warning">
+                没有找到可下载的文件。请先上传并处理文件。
+            </div>
+        {% endif %}
+    </div>
+    
+    <button id="back-to-top" class="btn btn-primary download-all-btn" title="返回顶部">
+        <i class="bi bi-arrow-up"></i>
+    </button>
+    
+    <!-- 图片预览模态窗口 -->
+    <div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-labelledby="imagePreviewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imagePreviewModalLabel">图片预览</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body p-0 position-relative">
+                    <div class="text-center p-2">
+                        <div id="imagePreviewContainer" class="position-relative" style="min-height: 400px;">
+                            <img id="previewImage" class="img-fluid" src="" alt="">
+                        </div>
+                    </div>
+                    
+                    <!-- 缩放按钮 -->
+                    <div class="position-absolute top-0 end-0 p-2">
+                        <div class="btn-group">
+                            <button id="zoomInBtn" class="btn btn-sm btn-light" title="放大">
+                                <i class="bi bi-zoom-in"></i>
+                            </button>
+                            <button id="zoomOutBtn" class="btn btn-sm btn-light" title="缩小">
+                                <i class="bi bi-zoom-out"></i>
+                            </button>
+                            <button id="zoomResetBtn" class="btn btn-sm btn-light" title="重置缩放">
+                                <i class="bi bi-arrows-fullscreen"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 导航按钮 -->
+                    <button class="btn btn-light position-absolute start-0 top-50 translate-middle-y" id="prevImageBtn">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <button class="btn btn-light position-absolute end-0 top-50 translate-middle-y" id="nextImageBtn">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="modal-footer">
+                    <div class="d-flex justify-content-between w-100">
+                        <span id="imageCaption" class="text-muted"></span>
+                        <a id="downloadBtn" href="#" class="btn btn-primary" download>
+                            <i class="bi bi-download"></i> 下载此图片
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 选择和下载相关功能
+        const selectAllBtn = document.getElementById('select-all-btn');
+        const selectNoneBtn = document.getElementById('select-none-btn');
+        const downloadSelectedBtn = document.getElementById('download-selected-btn');
+        const fileCheckboxes = document.querySelectorAll('.file-checkbox');
+        const backToTopBtn = document.getElementById('back-to-top');
+        const downloadAllBtn = document.getElementById('download-all-btn');
+        
+        // 全选按钮
+        selectAllBtn.addEventListener('click', () => {
+            fileCheckboxes.forEach(checkbox => {
+                checkbox.checked = true;
+            });
+        });
+        
+        // 取消全选按钮
+        selectNoneBtn.addEventListener('click', () => {
+            fileCheckboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+        });
+        
+        // 下载选中文件
+        downloadSelectedBtn.addEventListener('click', async () => {
+            const selectedFiles = Array.from(fileCheckboxes)
+                .filter(checkbox => checkbox.checked)
+                .map(checkbox => checkbox.value);
+            
+            if (selectedFiles.length === 0) {
+                alert('请至少选择一个文件进行下载');
+                return;
+            }
+            
+            // 开始依次下载选中的文件
+            for (const fileUrl of selectedFiles) {
+                // 延迟下载，避免浏览器阻止多个下载
+                await new Promise(resolve => {
+                    setTimeout(() => {
+                        const a = document.createElement('a');
+                        a.href = fileUrl;
+                        a.download = '';  // 使用服务器提供的文件名
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        resolve();
+                    }, 300);  // 300毫秒延迟
+                });
+            }
+        });
+        
+        // 返回顶部按钮
+        backToTopBtn.addEventListener('click', () => {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        });
+        
+        // 检查是否需要显示返回顶部按钮
+        window.addEventListener('scroll', () => {
+            if (window.pageYOffset > 300) {
+                backToTopBtn.style.display = 'block';
+            } else {
+                backToTopBtn.style.display = 'none';
+            }
+        });
+        
+        // 初始时隐藏返回顶部按钮
+        backToTopBtn.style.display = 'none';
+        
+        // 一键下载所有文件
+        downloadAllBtn.addEventListener('click', async () => {
+            // 显示正在下载提示
+            alert('准备下载所有文件，请在弹出的窗口中选择保存位置');
+            
+            try {
+                // 获取所有文件列表
+                const response = await fetch('{{ url_for("download_all_files") }}');
+                const files = await response.json();
+                
+                if (files.length === 0) {
+                    alert('没有找到可下载的文件');
+                    return;
+                }
+                
+                // 开始依次下载所有文件
+                for (const file of files) {
+                    // 延迟下载，避免浏览器阻止多个下载
+                    await new Promise(resolve => {
+                        setTimeout(() => {
+                            const a = document.createElement('a');
+                            a.href = file.url;
+                            a.download = file.name;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            resolve();
+                        }, 300);  // 300毫秒延迟
+                    });
+                }
+            } catch (error) {
+                console.error('下载出错:', error);
+                alert('下载文件时出错，请重试');
+            }
+        });
+        
+        // 初始化图片预览功能
+        document.addEventListener('DOMContentLoaded', function() {
+            const previewLinks = document.querySelectorAll('.preview-link');
+            const previewImage = document.getElementById('previewImage');
+            const imageCaption = document.getElementById('imageCaption');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const prevImageBtn = document.getElementById('prevImageBtn');
+            const nextImageBtn = document.getElementById('nextImageBtn');
+            const zoomInBtn = document.getElementById('zoomInBtn');
+            const zoomOutBtn = document.getElementById('zoomOutBtn');
+            const zoomResetBtn = document.getElementById('zoomResetBtn');
+            
+            // 存储所有图片URL和名称
+            const allImages = [];
+            let currentImageIndex = 0;
+            let currentZoom = 1.0;
+            
+            // 收集所有图片信息
+            previewLinks.forEach(link => {
+                const imageUrl = link.getAttribute('data-image-url');
+                const imageName = link.getAttribute('data-image-name');
+                allImages.push({ url: imageUrl, name: imageName });
+                
+                // 添加点击事件
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const clickedUrl = this.getAttribute('data-image-url');
+                    // 找到当前图片索引
+                    currentImageIndex = allImages.findIndex(img => img.url === clickedUrl);
+                    loadCurrentImage();
+                    resetZoom();
+                });
+            });
+            
+            // 加载当前索引的图片
+            function loadCurrentImage() {
+                if (allImages.length === 0) return;
+                
+                const image = allImages[currentImageIndex];
+                previewImage.src = image.url;
+                imageCaption.textContent = image.name;
+                downloadBtn.href = image.url;
+                downloadBtn.setAttribute('download', image.name);
+                
+                // 更新导航按钮状态
+                prevImageBtn.style.display = currentImageIndex > 0 ? 'block' : 'none';
+                nextImageBtn.style.display = currentImageIndex < allImages.length - 1 ? 'block' : 'none';
+            }
+            
+            // 上一张图片
+            prevImageBtn.addEventListener('click', function() {
+                if (currentImageIndex > 0) {
+                    currentImageIndex--;
+                    loadCurrentImage();
+                    resetZoom();
+                }
+            });
+            
+            // 下一张图片
+            nextImageBtn.addEventListener('click', function() {
+                if (currentImageIndex < allImages.length - 1) {
+                    currentImageIndex++;
+                    loadCurrentImage();
+                    resetZoom();
+                }
+            });
+            
+            // 放大
+            zoomInBtn.addEventListener('click', function() {
+                currentZoom += 0.2;
+                updateZoom();
+            });
+            
+            // 缩小
+            zoomOutBtn.addEventListener('click', function() {
+                if (currentZoom > 0.4) {
+                    currentZoom -= 0.2;
+                    updateZoom();
+                }
+            });
+            
+            // 重置缩放
+            zoomResetBtn.addEventListener('click', function() {
+                resetZoom();
+            });
+            
+            function resetZoom() {
+                currentZoom = 1.0;
+                updateZoom();
+            }
+            
+            function updateZoom() {
+                previewImage.style.transform = `scale(${currentZoom})`;
+                previewImage.style.transformOrigin = 'center center';
+                previewImage.style.transition = 'transform 0.2s ease-in-out';
+            }
+            
+            // 键盘快捷键
+            document.addEventListener('keydown', function(e) {
+                const modal = document.getElementById('imagePreviewModal');
+                if (modal.classList.contains('show')) {
+                    if (e.key === 'ArrowLeft') {
+                        prevImageBtn.click();
+                    } else if (e.key === 'ArrowRight') {
+                        nextImageBtn.click();
+                    } else if (e.key === '+' || e.key === '=') {
+                        zoomInBtn.click();
+                    } else if (e.key === '-') {
+                        zoomOutBtn.click();
+                    } else if (e.key === '0') {
+                        zoomResetBtn.click();
+                    } else if (e.key === 'Escape') {
+                        modal.querySelector('.btn-close').click();
+                    }
+                }
+            });
+            
+            // 监听模态窗口关闭事件，重置缩放
+            const modal = document.getElementById('imagePreviewModal');
+            modal.addEventListener('hidden.bs.modal', function() {
+                resetZoom();
+            });
+        });
+    </script>
+</body>
+</html> 

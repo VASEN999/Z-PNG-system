@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>文件转PNG工具</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        .drop-area {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background-color: #f8f9fa;
+            transition: all 0.3s;
+        }
+        .drop-area.highlight {
+            border-color: #007bff;
+            background-color: #e8f4ff;
+        }
+        .file-item {
+            border: 1px solid #eee;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #fff;
+        }
+        .file-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .thumbnail-container {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            gap: 10px;
+            padding: 10px 0;
+        }
+        .thumbnail {
+            max-height: 100px;
+            max-width: 100px;
+            object-fit: contain;
+            border: 1px solid #ddd;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .thumbnail:hover {
+            transform: scale(1.05);
+        }
+        .modal-body img {
+            max-width: 100%;
+        }
+        .order-badge {
+            cursor: pointer;
+        }
+        .active-order {
+            background-color: #198754 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <header class="pb-3 mb-4 border-bottom">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="display-5 fw-bold">文件转PNG工具</h1>
+                <div class="dropdown">
+                    <button class="btn btn-outline-primary dropdown-toggle" type="button" id="orderDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        订单管理
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="orderDropdown">
+                        <li><button class="dropdown-item" id="createOrderBtn">创建新订单</button></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">订单列表</h6></li>
+                        {% if orders %}
+                            {% for order in orders %}
+                                <li>
+                                    <span class="dropdown-item order-item d-flex justify-content-between align-items-center">
+                                        <span class="order-id" data-order-id="{{ order }}">{{ order }}</span>
+                                        <span class="badge {% if order == active_order %}active-order bg-success{% else %}bg-secondary{% endif %} rounded-pill order-badge" data-order-id="{{ order }}">
+                                            {% if order == active_order %}当前{% else %}激活{% endif %}
+                                        </span>
+                                    </span>
+                                </li>
+                            {% endfor %}
+                        {% else %}
+                            <li><span class="dropdown-item">无订单</span></li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </header>
+
+        <div class="p-4 mb-4 bg-light rounded-3">
+            <div class="container-fluid">
+                <h2>当前订单: <span id="activeOrderId">{{ active_order if active_order else "无" }}</span></h2>
+                <div class="drop-area mt-3" id="dropArea">
+                    <i class="bi bi-cloud-upload fs-1"></i>
+                    <h4>拖拽文件到此处或点击上传</h4>
+                    <p class="text-muted">支持的格式: PDF, Word, PPT, 图片, ZIP</p>
+                    <input type="file" id="fileInput" class="d-none" multiple>
+                    <button class="btn btn-primary" id="uploadBtn">选择文件</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4" id="fileList">
+            {% if files %}
+                {% for file in files %}
+                    <div class="col-12 file-item" data-file-id="{{ file.id }}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5>{{ file.name }}</h5>
+                            <div class="file-actions">
+                                <button class="btn btn-sm btn-outline-primary preview-btn" data-file-id="{{ file.id }}">
+                                    <i class="bi bi-eye"></i> 预览
+                                </button>
+                                <button class="btn btn-sm btn-outline-success download-btn" data-file-id="{{ file.id }}">
+                                    <i class="bi bi-download"></i> 下载
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger delete-btn" data-file-id="{{ file.id }}">
+                                    <i class="bi bi-trash"></i> 删除
+                                </button>
+                            </div>
+                        </div>
+                        <div class="thumbnail-container">
+                            {% for png_path in file.png_paths %}
+                                <img 
+                                    src="{{ url_for('get_png', file_id=file.id, png_file=png_path.split('/')[-1]) }}" 
+                                    class="thumbnail" 
+                                    data-file-id="{{ file.id }}" 
+                                    data-index="{{ loop.index0 }}"
+                                    alt="缩略图 {{ loop.index }}"
+                                >
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12 text-center py-5" id="noFilesMessage">
+                    <i class="bi bi-folder-x fs-1 text-muted"></i>
+                    <h3 class="text-muted">没有文件</h3>
+                    <p class="text-muted">上传文件来开始处理</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="text-center" id="processing" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">处理中...</span>
+            </div>
+            <p>正在处理文件，请稍候...</p>
+        </div>
+
+        {% if files %}
+            <div class="d-grid gap-2 d-md-flex justify-content-md-center mb-4">
+                <button class="btn btn-primary btn-lg" id="downloadAllBtn">
+                    <i class="bi bi-download"></i> 下载所有转换文件
+                </button>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- 预览模态窗口 -->
+    <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="previewModalLabel">文件预览</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <div class="position-relative">
+                        <img src="" id="previewImage" class="img-fluid">
+                        <button class="btn btn-outline-dark position-absolute top-50 start-0 translate-middle-y" id="prevImageBtn">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <button class="btn btn-outline-dark position-absolute top-50 end-0 translate-middle-y" id="nextImageBtn">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                    <div class="mt-3">
+                        <span id="currentImageIndex">1</span> / <span id="totalImages">1</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-primary" id="downloadCurrentBtn">
+                        <i class="bi bi-download"></i> 下载当前图片
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 下载选项模态窗口 -->
+    <div class="modal fade" id="downloadModal" tabindex="-1" aria-labelledby="downloadModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="downloadModalLabel">下载选项</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body">
+                    <p>请选择下载方式：</p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" id="downloadZipBtn">打包下载所有页面 (ZIP)</button>
+                        <div id="downloadSingleContainer" class="d-grid gap-2 mt-3">
+                            <!-- 动态填充 -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 元素获取
+            const dropArea = document.getElementById('dropArea');
+            const fileInput = document.getElementById('fileInput');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const fileList = document.getElementById('fileList');
+            const downloadAllBtn = document.getElementById('downloadAllBtn');
+            const processing = document.getElementById('processing');
+            const noFilesMessage = document.getElementById('noFilesMessage');
+            const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+            const downloadModal = new bootstrap.Modal(document.getElementById('downloadModal'));
+            const previewImage = document.getElementById('previewImage');
+            const prevImageBtn = document.getElementById('prevImageBtn');
+            const nextImageBtn = document.getElementById('nextImageBtn');
+            const currentImageIndex = document.getElementById('currentImageIndex');
+            const totalImages = document.getElementById('totalImages');
+            const downloadCurrentBtn = document.getElementById('downloadCurrentBtn');
+            const createOrderBtn = document.getElementById('createOrderBtn');
+            
+            // 当前预览状态
+            let currentPreviewFile = null;
+            let currentPreviewIndex = 0;
+            let currentPreviewImages = [];
+            
+            // 拖放区域事件
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, () => {
+                    dropArea.classList.add('highlight');
+                }, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, () => {
+                    dropArea.classList.remove('highlight');
+                }, false);
+            });
+            
+            dropArea.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                handleFiles(files);
+            }
+            
+            // 文件上传
+            uploadBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+            
+            fileInput.addEventListener('change', () => {
+                handleFiles(fileInput.files);
+            });
+            
+            function handleFiles(files) {
+                if (files.length === 0) return;
+                
+                const formData = new FormData();
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('file', files[i]);
+                }
+                
+                uploadFiles(formData);
+            }
+            
+            function uploadFiles(formData) {
+                processing.style.display = 'block';
+                
+                // 获取CSRF令牌
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                
+                // 将CSRF令牌添加到表单数据中
+                formData.append('csrf_token', csrfToken);
+                
+                fetch('/upload', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    processing.style.display = 'none';
+                    
+                    if (data.length > 0) {
+                        if (noFilesMessage) {
+                            noFilesMessage.style.display = 'none';
+                        }
+                        
+                        data.forEach(file => {
+                            addFileToList(file);
+                        });
+                        
+                        // 添加下载全部按钮（如果不存在）
+                        if (!downloadAllBtn) {
+                            const downloadAllContainer = document.createElement('div');
+                            downloadAllContainer.className = 'd-grid gap-2 d-md-flex justify-content-md-center mb-4';
+                            downloadAllContainer.innerHTML = `
+                                <button class="btn btn-primary btn-lg" id="downloadAllBtn">
+                                    <i class="bi bi-download"></i> 下载所有转换文件
+                                </button>
+                            `;
+                            document.querySelector('.container').appendChild(downloadAllContainer);
+                            document.getElementById('downloadAllBtn').addEventListener('click', downloadAll);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('上传错误:', error);
+                    processing.style.display = 'none';
+                    alert('文件上传失败，请重试');
+                });
+            }
+            
+            function addFileToList(file) {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'col-12 file-item';
+                fileItem.dataset.fileId = file.id;
+                
+                let thumbnailsHtml = '';
+                file.png_paths.forEach((path, index) => {
+                    thumbnailsHtml += `
+                        <img 
+                            src="/pngs/${file.id}/${path}" 
+                            class="thumbnail" 
+                            data-file-id="${file.id}" 
+                            data-index="${index}"
+                            alt="缩略图 ${index + 1}"
+                        >
+                    `;
+                });
+                
+                fileItem.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5>${file.name}</h5>
+                        <div class="file-actions">
+                            <button class="btn btn-sm btn-outline-primary preview-btn" data-file-id="${file.id}">
+                                <i class="bi bi-eye"></i> 预览
+                            </button>
+                            <button class="btn btn-sm btn-outline-success download-btn" data-file-id="${file.id}">
+                                <i class="bi bi-download"></i> 下载
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger delete-btn" data-file-id="${file.id}">
+                                <i class="bi bi-trash"></i> 删除
+                            </button>
+                        </div>
+                    </div>
+                    <div class="thumbnail-container">
+                        ${thumbnailsHtml}
+                    </div>
+                `;
+                
+                fileList.appendChild(fileItem);
+                
+                // 添加事件监听器
+                const previewBtn = fileItem.querySelector('.preview-btn');
+                const downloadBtn = fileItem.querySelector('.download-btn');
+                const deleteBtn = fileItem.querySelector('.delete-btn');
+                const thumbnails = fileItem.querySelectorAll('.thumbnail');
+                
+                previewBtn.addEventListener('click', () => showPreview(file.id));
+                downloadBtn.addEventListener('click', () => showDownloadOptions(file.id));
+                deleteBtn.addEventListener('click', () => deleteFile(file.id));
+                
+                thumbnails.forEach(thumbnail => {
+                    thumbnail.addEventListener('click', () => {
+                        const fileId = thumbnail.dataset.fileId;
+                        const index = parseInt(thumbnail.dataset.index);
+                        showModalPreview(fileId, index);
+                    });
+                });
+            }
+            
+            // 文件预览
+            function showPreview(fileId) {
+                window.location.href = `/preview/${fileId}`;
+            }
+            
+            // 模态窗口预览
+            function showModalPreview(fileId, index) {
+                const fileItem = document.querySelector(`.file-item[data-file-id="${fileId}"]`);
+                const thumbnails = fileItem.querySelectorAll('.thumbnail');
+                
+                currentPreviewFile = fileId;
+                currentPreviewIndex = index;
+                currentPreviewImages = Array.from(thumbnails).map(img => img.src);
+                
+                updateModalPreview();
+                previewModal.show();
+            }
+            
+            function updateModalPreview() {
+                previewImage.src = currentPreviewImages[currentPreviewIndex];
+                currentImageIndex.textContent = currentPreviewIndex + 1;
+                totalImages.textContent = currentPreviewImages.length;
+                
+                // 更新导航按钮状态
+                prevImageBtn.disabled = currentPreviewIndex === 0;
+                nextImageBtn.disabled = currentPreviewIndex === currentPreviewImages.length - 1;
+            }
+            
+            prevImageBtn.addEventListener('click', () => {
+                if (currentPreviewIndex > 0) {
+                    currentPreviewIndex--;
+                    updateModalPreview();
+                }
+            });
+            
+            nextImageBtn.addEventListener('click', () => {
+                if (currentPreviewIndex < currentPreviewImages.length - 1) {
+                    currentPreviewIndex++;
+                    updateModalPreview();
+                }
+            });
+            
+            // 下载当前预览图片
+            downloadCurrentBtn.addEventListener('click', () => {
+                const fileId = currentPreviewFile;
+                const index = currentPreviewIndex;
+                window.location.href = `/download/single/${fileId}/${index}`;
+            });
+            
+            // 显示下载选项
+            function showDownloadOptions(fileId) {
+                const fileItem = document.querySelector(`.file-item[data-file-id="${fileId}"]`);
+                const thumbnails = fileItem.querySelectorAll('.thumbnail');
+                
+                document.getElementById('downloadZipBtn').onclick = () => {
+                    window.location.href = `/download/${fileId}`;
+                    downloadModal.hide();
+                };
+                
+                const singleContainer = document.getElementById('downloadSingleContainer');
+                singleContainer.innerHTML = '';
+                
+                if (thumbnails.length > 1) {
+                    const header = document.createElement('h6');
+                    header.textContent = '或下载单个页面:';
+                    singleContainer.appendChild(header);
+                    
+                    thumbnails.forEach((thumbnail, index) => {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn btn-outline-primary';
+                        btn.innerHTML = `下载第 ${index + 1} 页`;
+                        btn.onclick = () => {
+                            window.location.href = `/download/single/${fileId}/${index}`;
+                            downloadModal.hide();
+                        };
+                        singleContainer.appendChild(btn);
+                    });
+                } else {
+                    singleContainer.innerHTML = '';
+                }
+                
+                downloadModal.show();
+            }
+            
+            // 删除文件
+            function deleteFile(fileId) {
+                if (!confirm('确定要删除此文件吗？')) return;
+                
+                // 获取CSRF令牌
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                
+                fetch(`/delete/${fileId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const fileItem = document.querySelector(`.file-item[data-file-id="${fileId}"]`);
+                        fileItem.remove();
+                        
+                        // 检查是否还有文件
+                        const remainingFiles = document.querySelectorAll('.file-item');
+                        if (remainingFiles.length === 0) {
+                            // 显示无文件消息
+                            const noFilesDiv = document.createElement('div');
+                            noFilesDiv.className = 'col-12 text-center py-5';
+                            noFilesDiv.id = 'noFilesMessage';
+                            noFilesDiv.innerHTML = `
+                                <i class="bi bi-folder-x fs-1 text-muted"></i>
+                                <h3 class="text-muted">没有文件</h3>
+                                <p class="text-muted">上传文件来开始处理</p>
+                            `;
+                            fileList.appendChild(noFilesDiv);
+                            
+                            // 隐藏下载全部按钮
+                            if (downloadAllBtn) {
+                                downloadAllBtn.parentElement.remove();
+                            }
+                        }
+                    } else {
+                        alert('删除失败: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('删除错误:', error);
+                    alert('删除失败，请重试');
+                });
+            }
+            
+            // 下载所有文件
+            if (downloadAllBtn) {
+                downloadAllBtn.addEventListener('click', downloadAll);
+            }
+            
+            function downloadAll() {
+                window.location.href = '/download/all';
+            }
+            
+            // 订单管理
+            createOrderBtn.addEventListener('click', createOrder);
+            
+            function createOrder() {
+                // 获取CSRF令牌
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                
+                fetch('/orders/create', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                })
+                .then(response => {
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                        return;
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.order_id) {
+                        window.location.reload();
+                    } else {
+                        alert('创建订单失败：' + (data ? data.error : '未知错误'));
+                    }
+                })
+                .catch(error => {
+                    console.error('创建订单错误:', error);
+                    alert('创建订单失败，请重试');
+                });
+            }
+            
+            // 激活订单
+            document.querySelectorAll('.order-badge').forEach(badge => {
+                badge.addEventListener('click', function() {
+                    const orderId = this.dataset.orderId;
+                    activateOrder(orderId);
+                });
+            });
+            
+            function activateOrder(orderId) {
+                // 获取CSRF令牌
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                
+                fetch(`/orders/activate/${orderId}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                })
+                .then(response => {
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                        return;
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.success) {
+                        window.location.reload();
+                    } else if (data) {
+                        alert('激活订单失败: ' + (data.error || '未知错误'));
+                    }
+                })
+                .catch(error => {
+                    console.error('激活订单错误:', error);
+                    alert('激活订单失败，请重试');
+                });
+            }
+        });
+    </script>
+</body>
+</html> 

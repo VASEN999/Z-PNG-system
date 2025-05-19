@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}订单管理 - 管理员控制面板{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2 class="mb-0">订单管理</h2>
+            <div>
+                <a href="{{ url_for('admin.index') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> 返回管理面板
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 添加筛选功能 -->
+    <div class="col-12 mb-4">
+        <div class="card filter-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-funnel-fill me-1"></i> 筛选订单</h5>
+                <a class="btn btn-sm btn-outline-secondary" data-toggle="collapse" href="#filterCollapse" role="button" aria-expanded="true" aria-controls="filterCollapse">
+                    <i class="bi bi-chevron-up"></i>
+                </a>
+            </div>
+            <div class="card-body collapse show" id="filterCollapse">
+                <div class="row">
+                    <div class="col-12">
+                        <form method="get" id="filter-form" class="d-flex flex-wrap align-items-end">
+                            <div class="form-group mr-2 mb-2">
+                                <label for="status" class="form-label">订单状态</label>
+                                <select name="status" id="status" class="custom-select">
+                                    <option value="">全部状态</option>
+                                    <option value="pending" {% if request.args.get('status') == 'pending' %}selected{% endif %}>待处理</option>
+                                    <option value="material" {% if request.args.get('status') == 'material' %}selected{% endif %}>补材料</option>
+                                    <option value="reviewed" {% if request.args.get('status') == 'reviewed' %}selected{% endif %}>已审核</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group mr-2 mb-2">
+                                <label for="creator" class="form-label">创建人</label>
+                                <select name="creator" id="creator" class="custom-select">
+                                    <option value="">全部创建人</option>
+                                    {% for user in users %}
+                                    <option value="{{ user.id }}" {% if request.args.get('creator')|int == user.id %}selected{% endif %}>{{ user.username }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="form-group mr-2 mb-2">
+                                <label for="note_search" class="form-label">备注搜索</label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                    </div>
+                                    <input type="text" class="form-control" id="note_search" name="note_search" placeholder="输入关键词搜索备注" value="{{ request.args.get('note_search', '') }}">
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mb-2 ml-auto">
+                                <button type="submit" class="btn btn-primary mr-2">
+                                    <i class="bi bi-filter"></i> 应用筛选
+                                </button>
+                                <a href="{{ url_for('admin.orders') }}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-x-circle"></i> 清除筛选
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">所有订单</h5>
+                <form action="{{ url_for('orders.create_order') }}" method="post" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="input-group">
+                        <input type="text" name="note" class="form-control form-control-sm" placeholder="订单备注（可选）">
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="bi bi-plus-circle"></i> 创建新订单
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-body">
+                {% if orders %}
+                <div class="mb-3">
+                    {% if request.args.get('status') or request.args.get('creator') or request.args.get('note_search') %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-funnel"></i> 已筛选:
+                        {% if request.args.get('status') %}
+                            <span class="badge bg-secondary me-2">状态: 
+                                {% if request.args.get('status') == 'pending' %}待处理
+                                {% elif request.args.get('status') == 'material' %}补材料
+                                {% elif request.args.get('status') == 'reviewed' %}已审核
+                                {% endif %}
+                            </span>
+                        {% endif %}
+                        {% if request.args.get('creator') %}
+                            <span class="badge bg-secondary me-2">创建人: {{ creator_name }}</span>
+                        {% endif %}
+                        {% if request.args.get('note_search') %}
+                            <span class="badge bg-secondary">备注包含: {{ request.args.get('note_search') }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped">
+                        <thead>
+                            <tr>
+                                <th width="12%">订单号</th>
+                                <th width="15%">创建时间</th>
+                                <th width="15%">更新时间</th>
+                                <th width="8%" class="text-center">上传文件</th>
+                                <th width="8%" class="text-center">转换文件</th>
+                                <th width="12%" class="text-center">状态</th>
+                                <th width="15%">备注</th>
+                                <th width="15%" class="text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                            <tr class="{{ 'table-info' if order.is_active else '' }}">
+                                <td class="align-middle">
+                                    <span class="order-number">{{ order.order_number }}</span>
+                                </td>
+                                <td class="align-middle">
+                                    <span class="timestamp">{{ order.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                                </td>
+                                <td class="align-middle">
+                                    <span class="timestamp">{{ order.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                                </td>
+                                <td class="align-middle text-center">
+                                    <span class="file-count">{{ order.files|length }}</span>
+                                </td>
+                                <td class="align-middle text-center">
+                                    <span class="file-count">{{ order.conversions|length }}</span>
+                                </td>
+                                <td class="align-middle text-center">
+                                    {% if order.status == order.STATUS_PENDING %}
+                                    <span class="badge bg-warning">{{ order.status_display }}</span>
+                                    {% elif order.status == order.STATUS_MATERIAL %}
+                                    <span class="badge bg-info">{{ order.status_display }}</span>
+                                    {% elif order.status == order.STATUS_REVIEWED %}
+                                    <span class="badge bg-success">{{ order.status_display }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ order.status_display }}</span>
+                                    {% endif %}
+                                    
+                                    {% if order.is_active %}
+                                    <span class="badge bg-primary">活跃</span>
+                                    {% endif %}
+                                </td>
+                                <td class="align-middle">
+                                    <div class="note-container">
+                                        <span class="note-text" title="{{ order.note }}">{{ order.note or '-' }}</span>
+                                    </div>
+                                </td>
+                                <td class="align-middle text-center">
+                                    <div class="action-buttons">
+                                        <a href="{{ url_for('orders.view_order', order_number=order.order_number) }}" class="btn btn-outline-primary" title="查看详情">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        {% if not order.is_active %}
+                                        <form action="{{ url_for('orders.activate_order', order_number=order.order_number) }}" method="post" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-outline-success" title="回滚到此订单" onclick="return confirm('确定要回滚到此订单吗？这将恢复该订单的所有文件并替换当前工作环境！');">
+                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-outline-danger btn-delete-order" title="删除订单" data-order-number="{{ order.order_number }}">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-3">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i> 提示：
+                        <ul class="mb-0">
+                            <li>点击「查看详情」可以查看订单中的所有文件</li>
+                            <li>点击「回滚」可以恢复该订单的所有文件到工作区</li>
+                            <li>点击「删除」可以永久删除订单及其关联数据（需谨慎操作）</li>
+                        </ul>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <p class="mb-0">暂无订单记录。点击上方按钮创建新订单。</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 删除订单按钮点击事件
+        const deleteButtons = document.querySelectorAll('.btn-delete-order');
+        deleteButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const orderNumber = this.getAttribute('data-order-number');
+                if (confirm(`确定要删除订单 #${orderNumber} 吗？此操作不可恢复！`)) {
+                    // 获取CSRF令牌
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]') ? 
+                        document.querySelector('meta[name="csrf-token"]').getAttribute('content') : 
+                        document.querySelector('input[name="csrf_token"]').value;
+                    
+                    // 发送AJAX请求删除订单
+                    fetch(`/admin/api/delete_order/${orderNumber}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({
+                            csrf_token: csrfToken
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert(data.message);
+                            // 刷新页面
+                            location.reload();
+                        } else {
+                            alert('删除失败: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('删除失败，请重试');
+                    });
+                }
+            });
+        });
+    });
+</script>
+{% endblock %} 
