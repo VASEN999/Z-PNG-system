@@ -145,7 +145,7 @@
                                     {% if order.status == order.STATUS_PENDING %}
                                     <span class="badge bg-warning">{{ order.status_display }}</span>
                                     {% elif order.status == order.STATUS_MATERIAL %}
-                                    <span class="badge bg-info">{{ order.status_display }}</span>
+                                    <span class="badge bg-danger">{{ order.status_display }}</span>
                                     {% elif order.status == order.STATUS_REVIEWED %}
                                     <span class="badge bg-success">{{ order.status_display }}</span>
                                     {% else %}
@@ -367,7 +367,7 @@
                         if (statusValue === 'pending') {
                             dropdownButton.classList.add('btn-outline-warning');
                         } else if (statusValue === 'material') {
-                            dropdownButton.classList.add('btn-outline-info');
+                            dropdownButton.classList.add('btn-outline-danger');
                         } else if (statusValue === 'reviewed') {
                             dropdownButton.classList.add('btn-outline-success');
                         }

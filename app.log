@@ -496,3 +496,133 @@
 2025-05-19 11:34:19,928 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:34:19] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
 2025-05-19 11:40:40,232 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:40:40] "GET /admin/ HTTP/1.1" 200 -
 2025-05-19 11:40:40,281 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:40:40] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+2025-05-19 11:43:52,199 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:43:52] "GET /orders/ HTTP/1.1" 200 -
+2025-05-19 11:43:52,236 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:43:52] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+2025-05-19 11:44:01,376 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:01] "[32mGET / HTTP/1.1[0m" 302 -
+2025-05-19 11:44:01,408 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:01] "GET /orders/view/20250519-3600e2a1 HTTP/1.1" 200 -
+2025-05-19 11:44:01,489 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:01] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+2025-05-19 11:44:01,508 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:01] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page7.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:01,509 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:01] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page12.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,153 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page9.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,163 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page7.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,164 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/舒汉莲.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,165 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page11.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,165 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page8.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,166 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page2.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,267 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page3.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,267 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page1.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,268 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page9.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,270 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/孙琦.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,277 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page11.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,280 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page6.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,345 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page5.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,354 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page13.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,361 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page4.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,384 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page5.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,394 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page10.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,395 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page6.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,435 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page8.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,438 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page14.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,441 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page7.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,477 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page1.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,477 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page10.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,499 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page8.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,505 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page5.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,511 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page2.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,518 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page4.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,548 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/陈柏安.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,550 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page3.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,580 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page3.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,593 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page9.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,601 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page4.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,609 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page6.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,619 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page1.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,630 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page10.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:44:02,633 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:44:02] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page2.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:45:10,645 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:45:10] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page9.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:49:19,846 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:49:19] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page11.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:12,409 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:12] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page7.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:13,229 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:13] "GET /orders/view/20250519-3600e2a1 HTTP/1.1" 200 -
+2025-05-19 11:53:13,262 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:13] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+2025-05-19 11:53:13,344 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:13] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page12.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:13,351 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:13] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page7.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,317 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page9.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,332 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page11.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,339 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page2.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,339 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page8.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,340 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page7.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,342 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/舒汉莲.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,436 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/孙琦.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,441 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page9.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,455 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page3.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,457 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page1.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,458 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page11.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,459 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page6.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,520 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page5.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,530 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page13.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,536 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page5.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,541 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page4.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,543 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page6.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,546 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page10.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,570 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page8.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,594 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page14.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,619 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page7.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,628 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page10.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,628 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page1.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,634 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page8.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,651 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page5.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,699 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page2.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,702 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page4.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,718 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page3.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,719 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page3.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,720 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/陈柏安.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,738 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page9.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,814 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page4.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,815 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page6.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,820 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+舒汉莲+2567380873149369779_page2.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,876 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page1.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:14,877 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:14] "[36mGET /preview/北京电子签+孙琦+2567380873149369779_page10.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:18,205 - app.orders.routes - INFO - 收到状态更新请求: order=20250519-3600e2a1, ajax=True, form=ImmutableMultiDict([('csrf_token', 'IjA1ZDQxYTBlYTc3MDViYmY2ZWZlZmRmN2ZhNzFlN2M1YjYzOWM1Mjki.aCqrKQ.bXNZ1mIo_INoVXE--1PgFHw_1qo'), ('status', 'material')])
+2025-05-19 11:53:18,207 - app.orders.routes - INFO - 尝试将订单 20250519-3600e2a1 状态从 pending 更新为 material
+2025-05-19 11:53:18,221 - app.orders.routes - INFO - 成功更新订单 20250519-3600e2a1 状态: pending -> material
+2025-05-19 11:53:18,224 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:18] "POST /orders/update-status/20250519-3600e2a1 HTTP/1.1" 200 -
+2025-05-19 11:53:19,310 - app.orders.routes - INFO - 收到状态更新请求: order=20250519-3600e2a1, ajax=True, form=ImmutableMultiDict([('csrf_token', 'IjA1ZDQxYTBlYTc3MDViYmY2ZWZlZmRmN2ZhNzFlN2M1YjYzOWM1Mjki.aCqrKQ.bXNZ1mIo_INoVXE--1PgFHw_1qo'), ('status', 'reviewed')])
+2025-05-19 11:53:19,312 - app.orders.routes - INFO - 尝试将订单 20250519-3600e2a1 状态从 material 更新为 reviewed
+2025-05-19 11:53:19,325 - app.orders.routes - INFO - 成功更新订单 20250519-3600e2a1 状态: material -> reviewed
+2025-05-19 11:53:19,328 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:19] "POST /orders/update-status/20250519-3600e2a1 HTTP/1.1" 200 -
+2025-05-19 11:53:19,949 - app.orders.routes - INFO - 收到状态更新请求: order=20250519-3600e2a1, ajax=True, form=ImmutableMultiDict([('csrf_token', 'IjA1ZDQxYTBlYTc3MDViYmY2ZWZlZmRmN2ZhNzFlN2M1YjYzOWM1Mjki.aCqrKQ.bXNZ1mIo_INoVXE--1PgFHw_1qo'), ('status', 'pending')])
+2025-05-19 11:53:19,951 - app.orders.routes - INFO - 尝试将订单 20250519-3600e2a1 状态从 reviewed 更新为 pending
+2025-05-19 11:53:19,964 - app.orders.routes - INFO - 成功更新订单 20250519-3600e2a1 状态: reviewed -> pending
+2025-05-19 11:53:19,967 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:19] "POST /orders/update-status/20250519-3600e2a1 HTTP/1.1" 200 -
+2025-05-19 11:53:20,637 - app.orders.routes - INFO - 收到状态更新请求: order=20250519-3600e2a1, ajax=True, form=ImmutableMultiDict([('csrf_token', 'IjA1ZDQxYTBlYTc3MDViYmY2ZWZlZmRmN2ZhNzFlN2M1YjYzOWM1Mjki.aCqrKQ.bXNZ1mIo_INoVXE--1PgFHw_1qo'), ('status', 'reviewed')])
+2025-05-19 11:53:20,639 - app.orders.routes - INFO - 尝试将订单 20250519-3600e2a1 状态从 pending 更新为 reviewed
+2025-05-19 11:53:20,653 - app.orders.routes - INFO - 成功更新订单 20250519-3600e2a1 状态: pending -> reviewed
+2025-05-19 11:53:20,656 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:20] "POST /orders/update-status/20250519-3600e2a1 HTTP/1.1" 200 -
+2025-05-19 11:53:21,782 - app.orders.routes - INFO - 收到状态更新请求: order=20250519-3600e2a1, ajax=True, form=ImmutableMultiDict([('csrf_token', 'IjA1ZDQxYTBlYTc3MDViYmY2ZWZlZmRmN2ZhNzFlN2M1YjYzOWM1Mjki.aCqrKQ.bXNZ1mIo_INoVXE--1PgFHw_1qo'), ('status', 'pending')])
+2025-05-19 11:53:21,784 - app.orders.routes - INFO - 尝试将订单 20250519-3600e2a1 状态从 reviewed 更新为 pending
+2025-05-19 11:53:21,798 - app.orders.routes - INFO - 成功更新订单 20250519-3600e2a1 状态: reviewed -> pending
+2025-05-19 11:53:21,800 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:21] "POST /orders/update-status/20250519-3600e2a1 HTTP/1.1" 200 -
+2025-05-19 11:53:22,201 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:22] "[36mGET /preview/北京电子签+陈柏安+2567380873149369779_page9.png?order_id=40&order_number=20250519-3600e2a1 HTTP/1.1[0m" 304 -
+2025-05-19 11:53:22,972 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:22] "GET /orders/ HTTP/1.1" 200 -
+2025-05-19 11:53:23,047 - werkzeug - INFO - 127.0.0.1 - - [19/May/2025 11:53:23] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+2025-05-19 11:54:20,459 - werkzeug - INFO -  * Detected change in '/home/vasen/桌面/2025-5-16-003/2025-05-14-16.25/run.py', reloading
+2025-05-19 11:54:20,597 - werkzeug - INFO -  * Restarting with stat
+2025-05-19 11:54:20,838 - root - INFO - 检测到操作系统: Linux
+2025-05-19 11:54:20,933 - app - INFO - Secret Key: a-very-s...
+2025-05-19 11:54:20,933 - app - INFO - Session配置: SESSION_TYPE=filesystem
+2025-05-19 11:54:20,933 - app - INFO - CSRF配置: WTF_CSRF_ENABLED=True
+2025-05-19 11:54:20,934 - app - INFO - 启动邮件检查线程...
+2025-05-19 11:54:20,934 - app.mail.routes - INFO - 邮件检查线程启动
+2025-05-19 11:54:20,934 - app.mail.routes - INFO - 邮件检查线程已启动
+2025-05-19 11:54:20,935 - root - INFO - 应用实例创建成功
+2025-05-19 11:54:20,935 - root - INFO - 目录已创建或已存在: /home/vasen/桌面/2025-5-16-003/2025-05-14-16.25/app/uploads
+2025-05-19 11:54:20,935 - root - INFO - 目录已创建或已存在: /home/vasen/桌面/2025-5-16-003/2025-05-14-16.25/app/converted
+2025-05-19 11:54:20,935 - root - INFO - 目录已创建或已存在: /home/vasen/桌面/2025-5-16-003/2025-05-14-16.25/app/archive
+2025-05-19 11:54:20,935 - root - INFO - 目录已创建或已存在: /home/vasen/桌面/2025-5-16-003/2025-05-14-16.25/flask_session
+2025-05-19 11:54:20,935 - root - INFO - 创建新的数据库结构...
+2025-05-19 11:54:20,949 - root - INFO - 数据库初始化完成
+2025-05-19 11:54:20,950 - root - WARNING - 端口 8080 已被占用，正在查找可用端口...
+2025-05-19 11:54:20,950 - root - INFO - 自动选择端口 8000
+2025-05-19 11:54:20,950 - root - INFO - 应用启动于 http://127.0.0.1:8000，debug=True
+2025-05-19 11:54:20,956 - werkzeug - WARNING -  * Debugger is active!
+2025-05-19 11:54:20,958 - werkzeug - INFO -  * Debugger PIN: 242-375-353

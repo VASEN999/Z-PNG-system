@@ -2,6 +2,25 @@
 
 {% block title %}订单 #{{ order.order_number }} - 文件转换工具{% endblock %}
 
+{% block styles %}
+<style>
+    /* 状态按钮样式优化 */
+    .status-btn {
+        min-width: 60px;
+        padding: 0.25rem 0.5rem;
+        margin-right: 2px;
+    }
+    
+    /* 移动端响应式调整 */
+    @media (max-width: 576px) {
+        .status-btn {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.4rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-12 mb-3">
@@ -207,34 +226,36 @@
                     <tr>
                         <th>状态</th>
                         <td>
-                            {% if order.status == order.STATUS_PENDING %}
-                            <span class="badge bg-warning">{{ order.status_display }}</span>
-                            {% elif order.status == order.STATUS_MATERIAL %}
-                            <span class="badge bg-info">{{ order.status_display }}</span>
-                            {% elif order.status == order.STATUS_REVIEWED %}
-                            <span class="badge bg-success">{{ order.status_display }}</span>
-                            {% else %}
-                            <span class="badge bg-secondary">{{ order.status_display }}</span>
-                            {% endif %}
-                            
-                            {% if order.is_active %}
-                            <span class="badge bg-primary">活跃</span>
-                            {% endif %}
-                            
-                            <!-- 状态变更按钮组 -->
-                            <div class="mt-2">
-                                <div class="d-flex align-items-center">
-                                    <form action="{{ url_for('orders.update_status', order_number=order.order_number) }}" method="post" class="d-inline status-form">
+                            <div class="d-flex flex-column">
+                                <div class="mb-2">
+                                    {% if order.status == order.STATUS_PENDING %}
+                                    <span class="badge bg-warning">{{ order.status_display }}</span>
+                                    {% elif order.status == order.STATUS_MATERIAL %}
+                                    <span class="badge bg-danger">{{ order.status_display }}</span>
+                                    {% elif order.status == order.STATUS_REVIEWED %}
+                                    <span class="badge bg-success">{{ order.status_display }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ order.status_display }}</span>
+                                    {% endif %}
+                                    
+                                    {% if order.is_active %}
+                                    <span class="badge bg-primary">活跃</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- 状态变更按钮组 -->
+                                <div>
+                                    <form action="{{ url_for('orders.update_status', order_number=order.order_number) }}" method="post" class="status-form w-100">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <div class="btn-group btn-group-sm shadow-sm">
-                                            <button type="button" data-status="{{ order.STATUS_PENDING }}" class="btn btn-outline-warning status-btn {% if order.status == order.STATUS_PENDING %}active{% endif %}">
-                                                <i class="bi bi-hourglass me-1"></i> 待处理
+                                        <div class="d-flex flex-wrap gap-1">
+                                            <button type="button" data-status="{{ order.STATUS_PENDING }}" class="btn btn-sm btn-outline-warning status-btn flex-grow-1 {% if order.status == order.STATUS_PENDING %}active{% endif %}">
+                                                待处理
                                             </button>
-                                            <button type="button" data-status="{{ order.STATUS_MATERIAL }}" class="btn btn-outline-danger status-btn {% if order.status == order.STATUS_MATERIAL %}active{% endif %}">
-                                                <i class="bi bi-file-earmark-plus me-1"></i> 补材料
+                                            <button type="button" data-status="{{ order.STATUS_MATERIAL }}" class="btn btn-sm btn-outline-danger status-btn flex-grow-1 {% if order.status == order.STATUS_MATERIAL %}active{% endif %}">
+                                                补材料
                                             </button>
-                                            <button type="button" data-status="{{ order.STATUS_REVIEWED }}" class="btn btn-outline-success status-btn {% if order.status == order.STATUS_REVIEWED %}active{% endif %}">
-                                                <i class="bi bi-check-circle me-1"></i> 已审核
+                                            <button type="button" data-status="{{ order.STATUS_REVIEWED }}" class="btn btn-sm btn-outline-success status-btn flex-grow-1 {% if order.status == order.STATUS_REVIEWED %}active{% endif %}">
+                                                已审核
                                             </button>
                                         </div>
                                     </form>
