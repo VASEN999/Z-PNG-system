@@ -430,20 +430,14 @@ class FileService:
         """
         converted_files = []
         try:
-            # 首先尝试使用Go转换服务
-            if convert_client.health_check():
-                current_app.logger.info(f"使用Go转换服务转换PDF: {file.filename}")
-                output_paths = convert_client.convert_pdf_to_png(
-                    file.file_path, 
-                    current_app.config['CONVERTED_FOLDER']
-                )
-            else:
-                # 如果Go服务不可用，回退到本地转换
-                current_app.logger.info(f"Go转换服务不可用，使用本地转换: {file.filename}")
-                output_paths = convert_pdf_to_png(
-                    file.file_path, 
-                    current_app.config['CONVERTED_FOLDER']
-                )
+            if not convert_client.health_check():
+                raise RuntimeError("转换服务不可用")
+
+            current_app.logger.info(f"使用Go转换服务转换PDF: {file.filename}")
+            output_paths = convert_client.convert_pdf_to_png(
+                file.file_path,
+                current_app.config['CONVERTED_FOLDER']
+            )
             
             # 保存转换后的文件记录
             if output_paths:
@@ -477,20 +471,14 @@ class FileService:
         """
         converted_files = []
         try:
-            # 首先尝试使用Go转换服务
-            if convert_client.health_check():
-                current_app.logger.info(f"使用Go转换服务转换Word: {file.filename}")
-                output_paths = convert_client.convert_docx_to_png(
-                    file.file_path, 
-                    current_app.config['CONVERTED_FOLDER']
-                )
-            else:
-                # 如果Go服务不可用，回退到本地转换
-                current_app.logger.info(f"Go转换服务不可用，使用本地转换: {file.filename}")
-                output_paths = convert_docx_to_png(
-                    file.file_path, 
-                    current_app.config['CONVERTED_FOLDER']
-                )
+            if not convert_client.health_check():
+                raise RuntimeError("转换服务不可用")
+
+            current_app.logger.info(f"使用Go转换服务转换Word: {file.filename}")
+            output_paths = convert_client.convert_docx_to_png(
+                file.file_path,
+                current_app.config['CONVERTED_FOLDER']
+            )
             
             # 保存转换后的文件记录
             if output_paths:
@@ -524,20 +512,14 @@ class FileService:
         """
         converted_files = []
         try:
-            # 首先尝试使用Go转换服务
-            if convert_client.health_check():
-                current_app.logger.info(f"使用Go转换服务转换PPT: {file.filename}")
-                output_paths = convert_client.convert_pptx_to_png(
-                    file.file_path, 
-                    current_app.config['CONVERTED_FOLDER']
-                )
-            else:
-                # 如果Go服务不可用，回退到本地转换
-                current_app.logger.info(f"Go转换服务不可用，使用本地转换: {file.filename}")
-                output_paths = convert_pptx_to_png(
-                    file.file_path, 
-                    current_app.config['CONVERTED_FOLDER']
-                )
+            if not convert_client.health_check():
+                raise RuntimeError("转换服务不可用")
+
+            current_app.logger.info(f"使用Go转换服务转换PPT: {file.filename}")
+            output_paths = convert_client.convert_pptx_to_png(
+                file.file_path,
+                current_app.config['CONVERTED_FOLDER']
+            )
             
             # 保存转换后的文件记录
             if output_paths:
@@ -570,20 +552,14 @@ class FileService:
             转换成功返回转换后的文件对象，失败返回None
         """
         try:
-            # 首先尝试使用Go转换服务
-            if convert_client.health_check():
-                current_app.logger.info(f"使用Go转换服务转换图片: {file.filename}")
-                output_path = convert_client.convert_image_to_png(
-                    file.file_path, 
-                    current_app.config['CONVERTED_FOLDER']
-                )
-            else:
-                # 如果Go服务不可用，回退到本地转换
-                current_app.logger.info(f"Go转换服务不可用，使用本地转换: {file.filename}")
-                output_path = convert_image_to_png(
-                    file.file_path, 
-                    current_app.config['CONVERTED_FOLDER']
-                )
+            if not convert_client.health_check():
+                raise RuntimeError("转换服务不可用")
+
+            current_app.logger.info(f"使用Go转换服务转换图片: {file.filename}")
+            output_path = convert_client.convert_image_to_png(
+                file.file_path,
+                current_app.config['CONVERTED_FOLDER']
+            )
             
             # 保存转换后的文件记录
             if output_path:
@@ -614,6 +590,9 @@ class FileService:
         """
         converted_files = []
         try:
+            if not convert_client.health_check():
+                raise RuntimeError("转换服务不可用")
+
             # 提取压缩包
             extract_dir = FileService.extract_archive(file.file_path)
             if not extract_dir:
@@ -629,8 +608,8 @@ class FileService:
                     
                     # 根据文件类型进行转换
                     if file_path.lower().endswith('.pdf'):
-                        output_paths = convert_pdf_to_png(
-                            file_path, 
+                        output_paths = convert_client.convert_pdf_to_png(
+                            file_path,
                             current_app.config['CONVERTED_FOLDER']
                         )
                         for path in output_paths:
@@ -648,8 +627,8 @@ class FileService:
                                 converted_files.append(converted_file)
                     
                     elif file_path.lower().endswith(('.docx', '.doc')):
-                        output_paths = convert_docx_to_png(
-                            file_path, 
+                        output_paths = convert_client.convert_docx_to_png(
+                            file_path,
                             current_app.config['CONVERTED_FOLDER']
                         )
                         for path in output_paths:
@@ -667,8 +646,8 @@ class FileService:
                                 converted_files.append(converted_file)
                     
                     elif file_path.lower().endswith(('.pptx', '.ppt')):
-                        output_paths = convert_pptx_to_png(
-                            file_path, 
+                        output_paths = convert_client.convert_pptx_to_png(
+                            file_path,
                             current_app.config['CONVERTED_FOLDER']
                         )
                         for path in output_paths:
@@ -686,8 +665,8 @@ class FileService:
                                 converted_files.append(converted_file)
                     
                     elif file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif')):
-                        output_path = convert_image_to_png(
-                            file_path, 
+                        output_path = convert_client.convert_image_to_png(
+                            file_path,
                             current_app.config['CONVERTED_FOLDER']
                         )
                         out_filename = os.path.basename(output_path)
@@ -976,79 +955,46 @@ class FileService:
                 )
                 os.makedirs(output_dir, exist_ok=True)
             
-            # 尝试使用Go转换服务
-            try:
-                convert_svc_url = current_app.config.get('CONVERT_SVC_URL', 'http://localhost:8080/api')
-                
-                # 检查服务是否可用
-                try:
-                    health_check = requests.get(f"{convert_svc_url}/health", timeout=2)
-                    if health_check.status_code == 200:
-                        # 服务可用，使用Go服务进行转换
-                        payload = {
-                            "file_path": file_path,
-                            "output_dir": output_dir,
-                            "dpi": dpi
+            if not convert_client.health_check():
+                raise RuntimeError("转换服务不可用")
+
+            convert_svc_url = current_app.config.get('CONVERT_SVC_URL', 'http://localhost:8080/api')
+
+            payload = {
+                "file_path": file_path,
+                "output_dir": output_dir,
+                "dpi": dpi
+            }
+
+            response = requests.post(f"{convert_svc_url}/convert", json=payload, timeout=60)
+
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success"):
+                    converted_files = result.get("files", [])
+                    current_app.logger.info(f"使用Go服务成功转换文件: {file_path}")
+
+                    file_records = []
+                    for image_path in converted_files:
+                        file_hash = FileService.calculate_file_hash(image_path)
+
+                        file_data = {
+                            'filename': os.path.basename(image_path),
+                            'file_path': image_path,
+                            'file_type': 'image/png',
+                            'file_hash': file_hash,
+                            'source_hash': source_hash,
+                            'from_zip': from_zip,
+                            'zip_path': zip_path
                         }
-                        
-                        response = requests.post(f"{convert_svc_url}/convert", json=payload, timeout=60)
-                        
-                        if response.status_code == 200:
-                            result = response.json()
-                            if result.get("success"):
-                                converted_files = result.get("files", [])
-                                current_app.logger.info(f"使用Go服务成功转换文件: {file_path}")
-                                
-                                # 创建文件记录
-                                file_records = []
-                                for image_path in converted_files:
-                                    file_hash = FileService.calculate_file_hash(image_path)
-                                    
-                                    file_data = {
-                                        'filename': os.path.basename(image_path),
-                                        'file_path': image_path,
-                                        'file_type': 'image/png',
-                                        'file_hash': file_hash,
-                                        'source_hash': source_hash,
-                                        'from_zip': from_zip,
-                                        'zip_path': zip_path
-                                    }
-                                    
-                                    file_id = FileRepository.create_file(file_data)
-                                    file_data['id'] = file_id
-                                    file_records.append(file_data)
-                                
-                                return converted_files
-                except requests.RequestException:
-                    current_app.logger.warning("Go转换服务不可用，将使用Python实现")
-            except Exception as e:
-                current_app.logger.error(f"调用Go转换服务时出错: {str(e)}")
-            
-            # 如果Go服务不可用或者转换失败，回退到Python实现
-            current_app.logger.info(f"使用Python实现转换文件: {file_path}")
-            
-            # 检测文件类型
-            if file_type is None:
-                file_type = FileService.detect_file_type(file_path)
-            
-            # 根据文件类型进行转换
-            if file_type.startswith('application/pdf'):
-                return FileService.convert_pdf_to_images(file_path, output_dir, pages, dpi, source_hash)
-            elif file_type.startswith('application/vnd.openxmlformats-officedocument.wordprocessingml.document') or \
-                 file_type == 'application/msword':
-                return FileService.convert_word_to_images(file_path, output_dir, dpi, source_hash)
-            elif file_type.startswith('application/vnd.openxmlformats-officedocument.presentationml.presentation') or \
-                 file_type == 'application/vnd.ms-powerpoint':
-                return FileService.convert_ppt_to_images(file_path, output_dir, dpi, source_hash)
-            elif file_type.startswith('image/'):
-                return FileService.convert_image_to_png(file_path, output_dir, dpi, source_hash)
-            elif file_type == 'application/zip' or file_type == 'application/x-zip-compressed':
-                return FileService.extract_and_convert_archive(file_path)
-            elif file_type == 'application/vnd.rar' or file_type == 'application/x-rar-compressed':
-                return FileService.extract_and_convert_archive(file_path)
-            else:
-                current_app.logger.warning(f"不支持的文件类型: {file_type}")
-                return []
+
+                        file_id = FileRepository.create_file(file_data)
+                        file_data['id'] = file_id
+                        file_records.append(file_data)
+
+                    return converted_files
+
+            raise RuntimeError("文件转换失败")
         
         except Exception as e:
             current_app.logger.error(f"转换文件时出错: {file_path}, 错误: {str(e)}")

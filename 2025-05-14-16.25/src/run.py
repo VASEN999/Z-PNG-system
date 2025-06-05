@@ -10,6 +10,8 @@ from src.app import create_app
 from src.models import db, AdminUser
 import src.settings as config
 import socket
+import requests
+from src.utils.convert_client import convert_client
 
 # 设置环境变量连接到正确的微服务端口
 # 从环境变量获取，如果环境变量没有设置，则使用默认值
@@ -76,11 +78,30 @@ def find_available_port(start_port=8000):
         port += 1
     return port
 
+# 检查外部微服务是否可用
+def check_external_services():
+    if not convert_client.health_check():
+        logger.error("转换服务不可用，应用终止")
+        sys.exit(1)
+
+    archive_url = os.environ.get('ARCHIVE_SVC_URL', 'http://localhost:8088/api/v1/archive')
+    health_url = f"{archive_url.split('/archive')[0]}/health"
+    try:
+        resp = requests.get(health_url, timeout=5)
+        if resp.status_code != 200:
+            raise RuntimeError(f"status {resp.status_code}")
+    except Exception as e:
+        logger.error(f"归档服务不可用: {e}")
+        sys.exit(1)
+
 if __name__ == '__main__':
     try:
         # 确保目录存在
         ensure_directories_exist()
         
+        # 检查外部服务
+        check_external_services()
+
         # 获取数据库路径
         db_path = config.SQLALCHEMY_DATABASE_URI.replace('sqlite:///', '')
         
