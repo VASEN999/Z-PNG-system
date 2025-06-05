@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}管理员仪表盘{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="mb-4">系统仪表盘</h1>
+            
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">系统概览</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card text-center mb-3">
+                                <div class="card-body">
+                                    <h3>{{ users|length }}</h3>
+                                    <p class="text-muted">注册用户</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card text-center mb-3">
+                                <div class="card-body">
+                                    <h3>-</h3>
+                                    <p class="text-muted">待处理订单</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card text-center mb-3">
+                                <div class="card-body">
+                                    <h3>-</h3>
+                                    <p class="text-muted">未读邮件</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">系统用户</h5>
+                    <a href="{{ url_for('admin.create_user') }}" class="btn btn-sm btn-light">
+                        <i class="fas fa-plus"></i> 添加用户
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if users %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户名</th>
+                                    <th>姓名</th>
+                                    <th>邮箱</th>
+                                    <th>角色</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users %}
+                                <tr>
+                                    <td>{{ user.id }}</td>
+                                    <td>{{ user.username }}</td>
+                                    <td>{{ user.full_name }}</td>
+                                    <td>{{ user.email }}</td>
+                                    <td>
+                                        {% if user.is_admin %}
+                                        <span class="badge bg-primary">管理员</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">普通用户</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            编辑
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        系统中暂无用户。
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

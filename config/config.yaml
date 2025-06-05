@@ -1,0 +1,10 @@
+server:
+    address: :8080
+    mode: debug
+storage:
+    upload_dir: storage/uploads
+    converted_dir: storage/converted
+    archive_dir: storage/archive
+conversion:
+    dpi: 300
+    delete_original: false

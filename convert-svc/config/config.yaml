@@ -1,0 +1,12 @@
+server:
+  address: ":8081"
+  mode: "debug"  # debug或release
+
+storage:
+  upload_dir: "storage/uploads"
+  converted_dir: "storage/converted"
+  archive_dir: "storage/archive"
+
+conversion:
+  dpi: 300  # 转换DPI
+  delete_original: false  # 转换后是否删除原始文件 

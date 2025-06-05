@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.poetry]
+name = "archive-svc"
+version = "0.1.0"
+description = "文件归档与哈希检索服务"
+authors = ["Admin <admin@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+fastapi = "^0.110.0"
+uvicorn = "^0.27.0"
+python-multipart = "^0.0.9"
+aiofiles = "^23.2.1"
+pydantic = "^2.6.3"
+pydantic-settings = "^2.2.1"
+sqlalchemy = "^2.0.28"
+alembic = "^1.13.1"
+aiomysql = "^0.2.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.23.5"
+black = "^24.1.1"
+isort = "^5.13.2"
+flake8 = "^7.0.0"
+mypy = "^1.8.0"
+
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true 
