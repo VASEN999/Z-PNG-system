@@ -1,7 +1,6 @@
 import os
 import logging
 from flask import Flask, session, render_template
-from flask_session import Session
 from src.models import db
 from src.api import init_app as init_blueprints, csrf
 import src.settings as config
@@ -40,8 +39,7 @@ def create_app():
     csrf.init_app(app)
     app.logger.info(f"CSRF配置: WTF_CSRF_ENABLED={app.config.get('WTF_CSRF_ENABLED', True)}")
     
-    # 初始化会话
-    Session(app)
+    # Flask-Session 在当前运行环境可能不可用，直接使用默认会话实现
     app.logger.info(f"Session配置: SESSION_TYPE={app.config['SESSION_TYPE']}")
     
     # 添加Jinja2模板全局函数
