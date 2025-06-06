@@ -40,6 +40,11 @@ class OrderService:
         return OrderRepository.update_order_status(order_id, status)
     
     @staticmethod
+    def update_order_note(order_id, note):
+        """更新订单备注"""
+        return OrderRepository.update_order(order_id, note=note)
+    
+    @staticmethod
     def set_active_order(order_id, user_id=None):
         """设置活跃订单"""
         return OrderRepository.set_active(order_id, user_id)

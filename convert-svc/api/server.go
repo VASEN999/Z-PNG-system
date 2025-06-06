@@ -16,8 +16,8 @@ import (
 
 // Server HTTP服务器结构体
 type Server struct {
-	router *gin.Engine
-	config *config.Config
+	router     *gin.Engine
+	config     *config.Config
 	httpServer *http.Server
 }
 
@@ -57,13 +57,16 @@ func (s *Server) setupRoutes() {
 	{
 		// 健康检查
 		api.GET("/health", s.healthCheck)
-		
+
 		// 文件转换API
 		api.POST("/convert", s.convertFile)
-		
+
 		// 批量转换API
 		api.POST("/convert-batch", s.convertBatch)
 	}
+
+	// 添加根路径健康检查，与启动脚本兼容
+	s.router.GET("/health", s.healthCheck)
 
 	// 静态文件服务（可选）
 	s.router.Static("/files", s.config.Storage.ConvertedDir)
@@ -76,7 +79,7 @@ func (s *Server) Start() error {
 		Addr:    s.config.Server.Address,
 		Handler: s.router,
 	}
-	
+
 	// 启动服务器
 	return s.httpServer.ListenAndServe()
 }
@@ -92,16 +95,16 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // 健康检查处理程序
 func (s *Server) healthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status": "ok",
+		"status":  "ok",
 		"service": "convert-svc",
 	})
 }
 
 // FileConvertRequest 文件转换请求结构体
 type FileConvertRequest struct {
-	FilePath string `json:"file_path" binding:"required"` // 文件路径
-	OutputDir string `json:"output_dir,omitempty"`        // 可选的输出目录
-	DPI int `json:"dpi,omitempty"`                        // 可选的DPI设置
+	FilePath  string `json:"file_path" binding:"required"` // 文件路径
+	OutputDir string `json:"output_dir,omitempty"`         // 可选的输出目录
+	DPI       int    `json:"dpi,omitempty"`                // 可选的DPI设置
 }
 
 // FileConvertResponse 文件转换响应结构体
@@ -211,8 +214,8 @@ func (s *Server) convertBatch(c *gin.Context) {
 	var req BatchConvertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, BatchConvertResponse{
-			Success: false,
-			Message: "请求格式错误",
+			Success:  false,
+			Message:  "请求格式错误",
 			ErrorMsg: err.Error(),
 		})
 		return
@@ -298,4 +301,4 @@ func (s *Server) convertBatch(c *gin.Context) {
 		Message: "批量转换完成",
 		Results: results,
 	})
-} 
+}

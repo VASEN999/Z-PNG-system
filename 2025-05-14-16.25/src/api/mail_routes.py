@@ -155,8 +155,9 @@ def process_email(email_id):
     order = MailService.create_order_from_email(email_id, current_user.id)
     
     if order:
-        flash('已成功创建订单', 'success')
-        return redirect(url_for('orders.order_detail', order_id=order.id))
+        # 重定向到订单详情页面
+        flash(f'邮件已添加到系统并关联到订单 {order.order_number}', 'success')
+        return redirect(url_for('orders.order_detail', order_number=order.order_number))
     else:
         flash('处理邮件失败', 'error')
         return redirect(url_for('mail.email_detail', email_id=email_id))

@@ -6,6 +6,9 @@ import fitz  # PyMuPDF
 import docx
 from pptx import Presentation
 
+# 注意: 以下本地转换函数已弃用。系统现在仅依赖于Go转换服务。
+# 这些函数保留在代码中仅供参考，如果Go服务无法使用，系统将引发错误而不是回退到本地转换。
+
 def create_info_image(filename, message, output_dir=None):
     """创建一个包含信息的图片
     
@@ -56,6 +59,7 @@ def create_info_image(filename, message, output_dir=None):
     image.save(output_path)
     return output_path
 
+# 已弃用：本地PDF转PNG功能，系统现在仅使用Go转换服务
 def convert_pdf_to_png(pdf_path, output_dir=None, dpi=300):
     """将PDF文件转换为PNG图片
     
@@ -66,6 +70,8 @@ def convert_pdf_to_png(pdf_path, output_dir=None, dpi=300):
         
     Returns:
         生成的PNG文件路径列表
+    
+    注意: 此函数已弃用。系统现在仅依赖于Go转换服务。
     """
     # 如果没有指定输出目录，则创建临时目录
     if output_dir is None:
@@ -103,6 +109,7 @@ def convert_pdf_to_png(pdf_path, output_dir=None, dpi=300):
     
     return output_files
 
+# 已弃用：本地Word转PNG功能，系统现在仅使用Go转换服务
 def convert_docx_to_png(docx_path, output_dir=None, dpi=300):
     """将DOCX文件转换为PNG图片
     
@@ -113,6 +120,8 @@ def convert_docx_to_png(docx_path, output_dir=None, dpi=300):
         
     Returns:
         生成的PNG文件路径列表
+    
+    注意: 此函数已弃用。系统现在仅依赖于Go转换服务。
     """
     # 如果没有指定输出目录，则创建临时目录
     if output_dir is None:
@@ -155,6 +164,7 @@ def convert_docx_to_png(docx_path, output_dir=None, dpi=300):
     error_image_path = create_info_image(f"{base_name}_error.png", error_message, output_dir)
     return [error_image_path]
 
+# 已弃用：本地PPT转PNG功能，系统现在仅使用Go转换服务
 def convert_pptx_to_png(pptx_path, output_dir=None, dpi=300):
     """将PPTX文件转换为PNG图片
     
@@ -165,6 +175,8 @@ def convert_pptx_to_png(pptx_path, output_dir=None, dpi=300):
         
     Returns:
         生成的PNG文件路径列表
+    
+    注意: 此函数已弃用。系统现在仅依赖于Go转换服务。
     """
     # 如果没有指定输出目录，则创建临时目录
     if output_dir is None:
@@ -207,6 +219,7 @@ def convert_pptx_to_png(pptx_path, output_dir=None, dpi=300):
     error_image_path = create_info_image(f"{base_name}_error.png", error_message, output_dir)
     return [error_image_path]
 
+# 已弃用：本地图片转PNG功能，系统现在仅使用Go转换服务
 def convert_image_to_png(image_path, output_dir=None):
     """将图片文件转换为PNG格式
     
@@ -216,6 +229,8 @@ def convert_image_to_png(image_path, output_dir=None):
         
     Returns:
         生成的PNG文件路径
+    
+    注意: 此函数已弃用。系统现在仅依赖于Go转换服务。
     """
     # 如果没有指定输出目录，则创建临时目录
     if output_dir is None:

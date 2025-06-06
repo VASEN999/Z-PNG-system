@@ -42,6 +42,9 @@ def create_app():
     # Flask-Session 在当前运行环境可能不可用，直接使用默认会话实现
     app.logger.info(f"Session配置: SESSION_TYPE={app.config['SESSION_TYPE']}")
     
+    # 注册自定义过滤器
+    register_filters(app)
+    
     # 添加Jinja2模板全局函数
     register_template_globals(app)
     
@@ -147,4 +150,16 @@ def register_error_handlers(app):
     
     @app.errorhandler(403)
     def forbidden(e):
-        return render_template('error.html', error_code=403, error_message='禁止访问'), 403 
+        return render_template('error.html', error_code=403, error_message='禁止访问'), 403
+
+def register_filters(app):
+    """注册Jinja2自定义过滤器
+    
+    Args:
+        app: Flask应用实例
+    """
+    from src.utils.filters import timeago
+    
+    # 添加时间相对格式化过滤器
+    app.jinja_env.filters['timeago'] = timeago
+    app.logger.info("已注册自定义过滤器: timeago") 

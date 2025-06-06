@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import logging
+import time
 
 from app.api.routes import archive_router, health_router
 from app.models import init_db
@@ -51,6 +52,15 @@ def create_app() -> FastAPI:
         prefix=f"{settings.API_PREFIX}{settings.API_V1_STR}/archive",
         tags=["文件归档"],
     )
+    
+    # 添加根路径健康检查端点，与启动脚本兼容
+    @app.get("/health")
+    async def root_health_check():
+        return {
+            "status": "ok",
+            "service": settings.APP_NAME,
+            "timestamp": int(time.time()),
+        }
     
     # 添加启动事件
     @app.on_event("startup")

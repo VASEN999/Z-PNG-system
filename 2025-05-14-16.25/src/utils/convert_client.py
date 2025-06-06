@@ -14,7 +14,7 @@ class ConvertClient:
         Args:
             base_url: 转换服务的基础URL，如果为None则从环境变量或配置获取
         """
-        self.base_url = base_url or os.environ.get('CONVERT_SVC_URL', 'http://localhost:8080/api')
+        self.base_url = base_url or os.environ.get('CONVERT_SVC_URL', 'http://localhost:8081')
     
     def health_check(self):
         """检查转换服务是否正常运行

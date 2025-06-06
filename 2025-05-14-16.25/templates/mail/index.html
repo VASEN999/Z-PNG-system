@@ -132,7 +132,7 @@
                                 <td>
                                     {% if email.orders %}
                                     {% for order in email.orders %}
-                                    <a href="{{ url_for('orders.order_detail', order_id=order.id) }}">
+                                    <a href="{{ url_for('orders.order_detail', order_number=order.order_number) }}">
                                         {{ order.order_number }}
                                     </a>
                                     {% if not loop.last %}, {% endif %}

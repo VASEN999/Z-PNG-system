@@ -140,7 +140,7 @@
                                     <span class="order-number">{{ order.order_number }}</span>
                                 </td>
                                 <td class="align-middle text-center">
-                                    <span class="timestamp order-created-at">{{ order.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                                    <span class="timestamp order-created-at">{{ order.created_at | timeago }}</span>
                                 </td>
                                 <td class="align-middle text-center">
                                     <span class="file-count">{{ order.files|length }} / {{ order.conversions|length }}</span>
@@ -182,11 +182,11 @@
                                 </td>
                                 <td class="align-middle text-center">
                                     <div class="action-buttons">
-                                        <a href="{{ url_for('orders.order_detail', order_id=order.id) }}" class="btn btn-outline-primary">
-                                            <i class="bi bi-eye"></i> <span>查看</span>
+                                        <a href="{{ url_for('orders.order_detail', order_number=order.order_number) }}" class="btn btn-outline-primary">
+                                            <i class="bi bi-eye"></i> 查看
                                         </a>
                                         {% if not order.is_active %}
-                                        <form action="{{ url_for('orders.activate_order', order_id=order.id) }}" method="post" class="d-inline">
+                                        <form action="{{ url_for('orders.activate_order', order_number=order.order_number) }}" method="post" class="d-inline">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             {% for key, value in request.args.items() %}
                                             <input type="hidden" name="_{{ key }}" value="{{ value }}">

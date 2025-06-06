@@ -430,13 +430,16 @@ class FileService:
         """
         converted_files = []
         try:
-            if not convert_client.health_check():
-                raise RuntimeError("转换服务不可用")
-
-            current_app.logger.info(f"使用Go转换服务转换PDF: {file.filename}")
-            output_paths = convert_client.convert_pdf_to_png(
-                file.file_path,
-                current_app.config['CONVERTED_FOLDER']
+            current_app.logger.info(f"开始转换PDF: {file.filename}")
+            
+            # 使用convert_to_images进行转换
+            output_paths = FileService.convert_to_images(
+                file_path=file.file_path,
+                output_dir=os.path.join(current_app.config['CONVERTED_FOLDER'], f"pdf_{int(time.time())}"),
+                file_type="pdf",
+                dpi=300,
+                source_hash=file.file_hash,
+                order_id=file.order_id
             )
             
             # 保存转换后的文件记录
@@ -455,8 +458,8 @@ class FileService:
             
             return converted_files
         except Exception as e:
-            current_app.logger.error(f"转换PDF文件时出错: {file.filename}, 错误: {str(e)}")
-            return []
+            current_app.logger.error(f"转换PDF文件失败: {file.filename}, 错误: {str(e)}")
+            raise RuntimeError(f"PDF转换失败: {str(e)}")
 
     # 新增方法：转换Word文档
     @staticmethod
@@ -471,13 +474,16 @@ class FileService:
         """
         converted_files = []
         try:
-            if not convert_client.health_check():
-                raise RuntimeError("转换服务不可用")
-
-            current_app.logger.info(f"使用Go转换服务转换Word: {file.filename}")
-            output_paths = convert_client.convert_docx_to_png(
-                file.file_path,
-                current_app.config['CONVERTED_FOLDER']
+            current_app.logger.info(f"开始转换Word文档: {file.filename}")
+            
+            # 使用convert_to_images进行转换
+            output_paths = FileService.convert_to_images(
+                file_path=file.file_path,
+                output_dir=os.path.join(current_app.config['CONVERTED_FOLDER'], f"word_{int(time.time())}"),
+                file_type="docx",
+                dpi=300,
+                source_hash=file.file_hash,
+                order_id=file.order_id
             )
             
             # 保存转换后的文件记录
@@ -496,8 +502,8 @@ class FileService:
             
             return converted_files
         except Exception as e:
-            current_app.logger.error(f"转换Word文档时出错: {file.filename}, 错误: {str(e)}")
-            return []
+            current_app.logger.error(f"转换Word文档失败: {file.filename}, 错误: {str(e)}")
+            raise RuntimeError(f"Word转换失败: {str(e)}")
 
     # 新增方法：转换PPT文件
     @staticmethod
@@ -512,13 +518,16 @@ class FileService:
         """
         converted_files = []
         try:
-            if not convert_client.health_check():
-                raise RuntimeError("转换服务不可用")
-
-            current_app.logger.info(f"使用Go转换服务转换PPT: {file.filename}")
-            output_paths = convert_client.convert_pptx_to_png(
-                file.file_path,
-                current_app.config['CONVERTED_FOLDER']
+            current_app.logger.info(f"开始转换PPT: {file.filename}")
+            
+            # 使用convert_to_images进行转换
+            output_paths = FileService.convert_to_images(
+                file_path=file.file_path,
+                output_dir=os.path.join(current_app.config['CONVERTED_FOLDER'], f"ppt_{int(time.time())}"),
+                file_type="pptx",
+                dpi=300,
+                source_hash=file.file_hash,
+                order_id=file.order_id
             )
             
             # 保存转换后的文件记录
@@ -537,8 +546,8 @@ class FileService:
             
             return converted_files
         except Exception as e:
-            current_app.logger.error(f"转换PPT文件时出错: {file.filename}, 错误: {str(e)}")
-            return []
+            current_app.logger.error(f"转换PPT文件失败: {file.filename}, 错误: {str(e)}")
+            raise RuntimeError(f"PPT转换失败: {str(e)}")
 
     # 新增方法：转换图片文件
     @staticmethod
@@ -552,21 +561,23 @@ class FileService:
             转换成功返回转换后的文件对象，失败返回None
         """
         try:
-            if not convert_client.health_check():
-                raise RuntimeError("转换服务不可用")
-
-            current_app.logger.info(f"使用Go转换服务转换图片: {file.filename}")
-            output_path = convert_client.convert_image_to_png(
-                file.file_path,
-                current_app.config['CONVERTED_FOLDER']
+            current_app.logger.info(f"开始转换图片: {file.filename}")
+            
+            # 使用convert_to_images进行转换
+            output_paths = FileService.convert_to_images(
+                file_path=file.file_path,
+                output_dir=os.path.join(current_app.config['CONVERTED_FOLDER'], f"img_{int(time.time())}"),
+                file_type="image",
+                source_hash=file.file_hash,
+                order_id=file.order_id
             )
             
             # 保存转换后的文件记录
-            if output_path:
-                filename = os.path.basename(output_path)
+            if output_paths and len(output_paths) > 0:
+                filename = os.path.basename(output_paths[0])
                 converted_file = FileService.save_converted_file(
                     filename=filename,
-                    file_path=output_path,
+                    file_path=output_paths[0],
                     order_id=file.order_id,
                     source_file_id=file.id,
                     source_hash=file.file_hash
@@ -574,8 +585,8 @@ class FileService:
                 return converted_file
             return None
         except Exception as e:
-            current_app.logger.error(f"转换图片文件时出错: {file.filename}, 错误: {str(e)}")
-            return None
+            current_app.logger.error(f"转换图片文件失败: {file.filename}, 错误: {str(e)}")
+            raise RuntimeError(f"图片转换失败: {str(e)}")
 
     # 新增方法：提取并转换压缩包中的文件
     @staticmethod
@@ -590,28 +601,79 @@ class FileService:
         """
         converted_files = []
         try:
-            if not convert_client.health_check():
-                raise RuntimeError("转换服务不可用")
-
+            current_app.logger.info(f"开始处理压缩包: {file.filename}")
+            
             # 提取压缩包
             extract_dir = FileService.extract_archive(file.file_path)
             if not extract_dir:
-                return []
+                raise RuntimeError("无法提取压缩包内容")
             
             # 遍历提取的文件
             for root, dirs, files in os.walk(extract_dir):
                 for filename in files:
                     file_path = os.path.join(root, filename)
+                    file_lower = filename.lower()
                     
                     # 计算文件哈希值
                     file_hash = FileService.calculate_file_hash(file_path)
+                    current_app.logger.info(f"处理压缩包内文件: {filename}")
                     
-                    # 根据文件类型进行转换
-                    if file_path.lower().endswith('.pdf'):
-                        output_paths = convert_client.convert_pdf_to_png(
-                            file_path,
-                            current_app.config['CONVERTED_FOLDER']
+                    try:
+                        output_dir = os.path.join(
+                            current_app.config['CONVERTED_FOLDER'],
+                            f"zip_{int(time.time())}_{os.path.splitext(filename)[0]}"
                         )
+                        
+                        # 根据文件类型进行转换
+                        if file_lower.endswith('.pdf'):
+                            output_paths = FileService.convert_to_images(
+                                file_path=file_path,
+                                output_dir=output_dir,
+                                file_type="pdf",
+                                dpi=300,
+                                source_hash=file_hash,
+                                from_zip=True,
+                                zip_path=file.file_path,
+                                order_id=file.order_id
+                            )
+                        elif file_lower.endswith(('.docx', '.doc')):
+                            output_paths = FileService.convert_to_images(
+                                file_path=file_path,
+                                output_dir=output_dir,
+                                file_type="docx",
+                                dpi=300,
+                                source_hash=file_hash,
+                                from_zip=True,
+                                zip_path=file.file_path,
+                                order_id=file.order_id
+                            )
+                        elif file_lower.endswith(('.pptx', '.ppt')):
+                            output_paths = FileService.convert_to_images(
+                                file_path=file_path,
+                                output_dir=output_dir,
+                                file_type="pptx",
+                                dpi=300,
+                                source_hash=file_hash,
+                                from_zip=True,
+                                zip_path=file.file_path,
+                                order_id=file.order_id
+                            )
+                        elif file_lower.endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif')):
+                            output_paths = FileService.convert_to_images(
+                                file_path=file_path,
+                                output_dir=output_dir,
+                                file_type="image",
+                                source_hash=file_hash,
+                                from_zip=True,
+                                zip_path=file.file_path,
+                                order_id=file.order_id
+                            )
+                        else:
+                            # 跳过不支持的文件类型
+                            current_app.logger.info(f"跳过不支持的文件类型: {filename}")
+                            continue
+                        
+                        # 保存转换后的文件记录
                         for path in output_paths:
                             out_filename = os.path.basename(path)
                             converted_file = FileService.save_converted_file(
@@ -626,78 +688,25 @@ class FileService:
                             if converted_file:
                                 converted_files.append(converted_file)
                     
-                    elif file_path.lower().endswith(('.docx', '.doc')):
-                        output_paths = convert_client.convert_docx_to_png(
-                            file_path,
-                            current_app.config['CONVERTED_FOLDER']
-                        )
-                        for path in output_paths:
-                            out_filename = os.path.basename(path)
-                            converted_file = FileService.save_converted_file(
-                                filename=out_filename,
-                                file_path=path,
-                                order_id=file.order_id,
-                                source_file_id=file.id,
-                                source_hash=file_hash,
-                                from_zip=True,
-                                zip_path=file.file_path
-                            )
-                            if converted_file:
-                                converted_files.append(converted_file)
-                    
-                    elif file_path.lower().endswith(('.pptx', '.ppt')):
-                        output_paths = convert_client.convert_pptx_to_png(
-                            file_path,
-                            current_app.config['CONVERTED_FOLDER']
-                        )
-                        for path in output_paths:
-                            out_filename = os.path.basename(path)
-                            converted_file = FileService.save_converted_file(
-                                filename=out_filename,
-                                file_path=path,
-                                order_id=file.order_id,
-                                source_file_id=file.id,
-                                source_hash=file_hash,
-                                from_zip=True,
-                                zip_path=file.file_path
-                            )
-                            if converted_file:
-                                converted_files.append(converted_file)
-                    
-                    elif file_path.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.gif')):
-                        output_path = convert_client.convert_image_to_png(
-                            file_path,
-                            current_app.config['CONVERTED_FOLDER']
-                        )
-                        out_filename = os.path.basename(output_path)
-                        converted_file = FileService.save_converted_file(
-                            filename=out_filename,
-                            file_path=output_path,
-                            order_id=file.order_id,
-                            source_file_id=file.id,
-                            source_hash=file_hash,
-                            from_zip=True,
-                            zip_path=file.file_path
-                        )
-                        if converted_file:
-                            converted_files.append(converted_file)
+                    except Exception as e:
+                        current_app.logger.error(f"转换压缩包内文件失败: {filename}, 错误: {str(e)}")
+                        # 继续处理下一个文件
             
             # 清理临时目录
             try:
                 import shutil
                 shutil.rmtree(extract_dir)
-            except:
-                pass
+            except Exception as e:
+                current_app.logger.warning(f"清理临时目录失败: {str(e)}")
                 
             return converted_files
         except Exception as e:
             current_app.logger.error(f"处理压缩包时出错: {file.filename}, 错误: {str(e)}")
-            return []
+            raise RuntimeError(f"压缩包处理失败: {str(e)}")
 
     @staticmethod
     def archive_file(file_path, category="general", description=None, tags=None):
-        """
-        归档文件到archive-svc服务
+        """将文件归档到归档服务
         
         Args:
             file_path: 文件路径
@@ -706,76 +715,42 @@ class FileService:
             tags: 文件标签列表
             
         Returns:
-            字典包含归档状态和信息
+            归档成功返回归档文件ID，否则返回None
         """
-        try:
-            # 检查archive-svc服务是否可用
-            archive_svc_url = current_app.config.get('ARCHIVE_SVC_URL', 'http://localhost:8000/api/v1/archive')
-            
-            try:
-                # 尝试检查服务是否在线
-                health_check = requests.get(f"{archive_svc_url.split('/archive')[0]}/health", timeout=2)
-                if health_check.status_code != 200:
-                    current_app.logger.warning(f"Archive服务健康检查失败: {health_check.status_code}")
-                    return {"success": False, "message": "归档服务不可用"}
-            except requests.RequestException as e:
-                current_app.logger.warning(f"无法连接到Archive服务: {str(e)}")
-                return {"success": False, "message": "无法连接到归档服务"}
-            
-            # 准备请求数据
-            files = {'file': open(file_path, 'rb')}
-            data = {'category': category}
-            
-            if description:
-                data['description'] = description
-                
-            if tags and isinstance(tags, list):
-                for i, tag in enumerate(tags):
-                    data[f'tags'] = tag
-            
-            # 发送请求
-            response = requests.post(f"{archive_svc_url}/files", files=files, data=data, timeout=30)
-            
-            if response.status_code == 200:
-                result = response.json()
-                return {
-                    "success": True,
-                    "message": "文件归档成功",
-                    "file_id": result.get('file', {}).get('id'),
-                    "file_hash": result.get('file', {}).get('sha256_hash'),
-                    "stored_path": result.get('file', {}).get('file_path')
-                }
-            else:
-                error_msg = f"归档服务返回错误: {response.status_code}"
-                if response.content:
-                    try:
-                        error_data = response.json()
-                        error_msg = f"{error_msg}, {error_data.get('message', '')}"
-                    except:
-                        pass
-                current_app.logger.error(error_msg)
-                return {"success": False, "message": error_msg}
+        if not os.path.exists(file_path):
+            current_app.logger.error(f"归档文件不存在: {file_path}")
+            return None
         
+        # 获取归档服务URL
+        archive_svc_url = current_app.config.get('ARCHIVE_SVC_URL', 'http://localhost:8088/api/v1/archive')
+        
+        # 健康检查
+        try:
+            health_check = requests.get(f"{archive_svc_url.split('/archive')[0]}/health", timeout=2)
+            if health_check.status_code != 200:
+                current_app.logger.error(f"归档服务不可用: {health_check.status_code}")
+                return None
         except Exception as e:
-            current_app.logger.error(f"文件归档失败: {str(e)}")
-            return {"success": False, "message": f"文件归档失败: {str(e)}"}
+            current_app.logger.error(f"连接归档服务失败: {str(e)}")
+            return None
 
     @staticmethod
     def get_file_by_hash(file_hash):
-        """
-        通过哈希值从archive-svc获取文件信息
+        """根据文件哈希值从归档服务获取文件信息
         
         Args:
             file_hash: 文件哈希值
             
         Returns:
-            文件信息字典或None
+            文件信息字典，如果未找到则返回None
         """
+        if not file_hash:
+            return None
+        
+        # 获取归档服务URL
+        archive_svc_url = current_app.config.get('ARCHIVE_SVC_URL', 'http://localhost:8088/api/v1/archive')
+        
         try:
-            # 检查archive-svc服务是否可用
-            archive_svc_url = current_app.config.get('ARCHIVE_SVC_URL', 'http://localhost:8000/api/v1/archive')
-            
-            # 发送请求
             response = requests.get(f"{archive_svc_url}/files/hash/{file_hash}", timeout=10)
             
             if response.status_code == 200:
@@ -792,22 +767,22 @@ class FileService:
 
     @staticmethod
     def download_archived_file(file_id, target_path=None):
-        """
-        从归档服务下载文件
+        """从归档服务下载文件
         
         Args:
-            file_id: 文件ID
-            target_path: 目标保存路径，如果为None则返回文件内容
+            file_id: 归档文件ID
+            target_path: 目标保存路径，如果为None则使用临时目录
             
         Returns:
-            成功时：如果target_path为None，返回文件内容；否则返回True
-            失败时：返回False
+            下载成功返回文件路径，否则返回None
         """
+        if not file_id:
+            return None
+        
+        # 获取归档服务URL
+        archive_svc_url = current_app.config.get('ARCHIVE_SVC_URL', 'http://localhost:8088/api/v1/archive')
+        
         try:
-            # 检查archive-svc服务是否可用
-            archive_svc_url = current_app.config.get('ARCHIVE_SVC_URL', 'http://localhost:8000/api/v1/archive')
-            
-            # 发送请求
             response = requests.get(f"{archive_svc_url}/files/{file_id}/download", timeout=30, stream=True)
             
             if response.status_code == 200:
@@ -817,17 +792,17 @@ class FileService:
                         for chunk in response.iter_content(chunk_size=8192):
                             if chunk:
                                 f.write(chunk)
-                    return True
+                    return target_path
                 else:
                     # 返回文件内容
                     return response.content
             else:
                 current_app.logger.error(f"从归档服务下载文件失败: {response.status_code}")
-                return False
+                return None
         
         except Exception as e:
             current_app.logger.error(f"下载归档文件失败: {str(e)}")
-            return False
+            return None
 
     @staticmethod
     def store_file(uploaded_file, file_dir, file_type=None, filename=None):
@@ -900,12 +875,7 @@ class FileService:
                 'archived_id': archived_id
             }
             
-            # 保存到数据库
-            file_id = FileRepository.create_file(file_data)
-            
-            # 添加ID到文件数据
-            file_data['id'] = file_id
-            
+            # 不再创建数据库记录，只返回文件信息
             return file_data
         
         except Exception as e:
@@ -914,9 +884,9 @@ class FileService:
 
     @staticmethod
     def convert_to_images(file_path, output_dir=None, file_type=None, pages=None, dpi=200, 
-                          source_hash=None, from_zip=False, zip_path=None):
+                          source_hash=None, from_zip=False, zip_path=None, order_id=None):
         """
-        将文件转换为PNG图片
+        将文件转换为PNG图片，使用Go转换服务
         
         Args:
             file_path: 文件路径
@@ -927,9 +897,13 @@ class FileService:
             source_hash: 源文件哈希值
             from_zip: 是否从ZIP提取的文件
             zip_path: ZIP文件路径
+            order_id: 订单ID，用于按订单隔离存储
             
         Returns:
             转换后的图片路径列表
+            
+        Raises:
+            RuntimeError: 转换服务不可用或转换失败
         """
         try:
             if not os.path.exists(file_path):
@@ -955,47 +929,94 @@ class FileService:
                 )
                 os.makedirs(output_dir, exist_ok=True)
             
+            # 检查转换服务可用性
+            convert_svc_url = current_app.config.get('CONVERT_SVC_URL', 'http://localhost:8081')
+            
             if not convert_client.health_check():
-                raise RuntimeError("转换服务不可用")
+                current_app.logger.error(f"转换服务不可用: {convert_svc_url}")
+                raise RuntimeError(f"转换服务不可用，请确保转换服务已启动并运行在 {convert_svc_url}")
 
-            convert_svc_url = current_app.config.get('CONVERT_SVC_URL', 'http://localhost:8080/api')
-
+            # 准备转换参数
             payload = {
                 "file_path": file_path,
                 "output_dir": output_dir,
                 "dpi": dpi
             }
+            
+            if pages:
+                payload["pages"] = pages
 
-            response = requests.post(f"{convert_svc_url}/convert", json=payload, timeout=60)
+            # 调用转换服务
+            current_app.logger.info(f"调用Go转换服务处理文件: {file_path}")
+            response = requests.post(f"{convert_svc_url}/api/convert", json=payload, timeout=60)
 
             if response.status_code == 200:
                 result = response.json()
                 if result.get("success"):
                     converted_files = result.get("files", [])
-                    current_app.logger.info(f"使用Go服务成功转换文件: {file_path}")
+                    current_app.logger.info(f"使用转换服务成功转换文件: {file_path} -> {len(converted_files)} 个文件")
 
+                    # 存储规范化的文件路径列表，用于返回
+                    final_converted_files = []
                     file_records = []
+                    
+                    # 确保converted目录存在
+                    converted_folder = current_app.config['CONVERTED_FOLDER']
+                    
+                    # 如果提供了订单ID，则按订单ID创建子目录
+                    if order_id:
+                        converted_folder = os.path.join(converted_folder, f"order_{order_id}")
+                    
+                    os.makedirs(converted_folder, exist_ok=True)
+                    
+                    # 从文件路径获取基本名称（不包含扩展名）
+                    base_filename = os.path.splitext(os.path.basename(file_path))[0]
+                    
                     for image_path in converted_files:
-                        file_hash = FileService.calculate_file_hash(image_path)
-
-                        file_data = {
-                            'filename': os.path.basename(image_path),
-                            'file_path': image_path,
-                            'file_type': 'image/png',
-                            'file_hash': file_hash,
-                            'source_hash': source_hash,
-                            'from_zip': from_zip,
-                            'zip_path': zip_path
-                        }
-
-                        file_id = FileRepository.create_file(file_data)
-                        file_data['id'] = file_id
-                        file_records.append(file_data)
-
-                    return converted_files
-
-            raise RuntimeError("文件转换失败")
-        
+                        try:
+                            # 获取原始转换后文件的文件名
+                            original_filename = os.path.basename(image_path)
+                            
+                            # 创建在converted目录中的目标路径
+                            target_path = os.path.join(converted_folder, original_filename)
+                            
+                            # 复制文件到converted目录
+                            if os.path.exists(image_path):
+                                shutil.copy2(image_path, target_path)
+                                current_app.logger.info(f"已复制转换文件: {image_path} -> {target_path}")
+                                
+                                # 计算文件哈希值
+                                file_hash = FileService.calculate_file_hash(target_path)
+                                
+                                # 收集文件信息
+                                file_data = {
+                                    'filename': original_filename,
+                                    'file_path': target_path,  # 使用新路径
+                                    'file_type': 'image/png',
+                                    'file_hash': file_hash,
+                                    'source_hash': source_hash,
+                                    'from_zip': from_zip,
+                                    'zip_path': zip_path
+                                }
+                                file_records.append(file_data)
+                                
+                                # 添加到最终返回的文件列表
+                                final_converted_files.append(target_path)
+                            else:
+                                current_app.logger.error(f"转换后的文件不存在: {image_path}")
+                        except Exception as e:
+                            current_app.logger.error(f"处理转换后的文件时出错: {image_path}, 错误: {str(e)}")
+                    
+                    # 返回已复制到converted目录的文件路径
+                    return final_converted_files
+                else:
+                    error_msg = result.get("error", "未知错误")
+                    current_app.logger.error(f"转换服务处理文件失败: {error_msg}")
+                    raise RuntimeError(f"文件转换失败: {error_msg}")
+            else:
+                current_app.logger.error(f"转换服务HTTP错误: {response.status_code}, {response.text}")
+                raise RuntimeError(f"转换服务返回错误状态码: {response.status_code}")
+            
         except Exception as e:
             current_app.logger.error(f"转换文件时出错: {file_path}, 错误: {str(e)}")
-            return [] 
+            raise RuntimeError(f"文件转换失败: {str(e)}") 
