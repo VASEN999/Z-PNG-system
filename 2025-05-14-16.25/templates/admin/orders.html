@@ -126,7 +126,7 @@
                         </thead>
                         <tbody>
                             {% for order in orders %}
-                            <tr class="{{ 'table-info' if order.is_active else '' }}">
+                            <tr class="">
                                 <td class="align-middle">
                                     <span class="order-number text-truncate d-block" title="{{ order.order_number }}">{{ order.order_number }}</span>
                                 </td>
@@ -152,10 +152,6 @@
                                     {% else %}
                                     <span class="badge bg-secondary">{{ order.status_display }}</span>
                                     {% endif %}
-                                    
-                                    {% if order.is_active %}
-                                    <span class="badge bg-primary">活跃</span>
-                                    {% endif %}
                                 </td>
                                 <td class="align-middle">
                                     <div class="note-container">
@@ -164,17 +160,9 @@
                                 </td>
                                 <td class="align-middle text-center">
                                     <div class="action-buttons">
-                                        <a href="{{ url_for('orders.order_detail', order_id=order.id) }}" class="btn btn-outline-primary" title="查看详情">
+                                        <a href="{{ url_for('orders.order_detail', order_number=order.order_number) }}" class="btn btn-outline-primary" title="查看详情">
                                             <i class="bi bi-eye"></i>
                                         </a>
-                                        {% if not order.is_active %}
-                                        <form action="{{ url_for('orders.activate_order', order_id=order.id) }}" method="post" class="d-inline">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit" class="btn btn-outline-success" title="回滚到此订单" onclick="return confirm('确定要回滚到此订单吗？这将恢复该订单的所有文件并替换当前工作环境！');">
-                                                <i class="bi bi-arrow-counterclockwise"></i>
-                                            </button>
-                                        </form>
-                                        {% endif %}
                                         <button type="button" class="btn btn-outline-danger btn-delete-order" title="删除订单" data-order-number="{{ order.order_number }}">
                                             <i class="bi bi-trash"></i>
                                         </button>
@@ -190,7 +178,6 @@
                         <i class="bi bi-info-circle me-2"></i> 提示：
                         <ul class="mb-0">
                             <li>点击「查看详情」可以查看订单中的所有文件</li>
-                            <li>点击「回滚」可以恢复该订单的所有文件到工作区</li>
                             <li>点击「删除」可以永久删除订单及其关联数据（需谨慎操作）</li>
                         </ul>
                     </div>

@@ -95,29 +95,35 @@ def create_order():
         return jsonify(success=True, order=order.to_dict())
     
     flash(f'订单 {order.order_number} 创建成功', 'success')
-    return redirect(url_for('orders.order_detail', order_id=order.id))
+    return redirect(url_for('orders.order_detail', order_number=order.order_number))
 
-@orders_bp.route('/<int:order_id>')
+@orders_bp.route('/<order_number>')
 @login_required
-def order_detail(order_id):
+def order_detail(order_number):
     """订单详情"""
-    order = OrderService.get_order(order_id)
+    # 尝试通过订单号获取订单
+    order = OrderService.get_order_by_number(order_number)
+    
+    # 兼容旧URL格式（如果order_number是数字ID）
+    if not order and order_number.isdigit():
+        order = OrderService.get_order(int(order_number))
+    
     if not order:
         flash('订单不存在', 'error')
         return redirect(url_for('orders.order_list'))
     
     # 获取订单的所有文件
-    uploaded_files = OrderService.get_order_files(order_id)
+    uploaded_files = OrderService.get_order_files(order.id)
     
     # 获取订单的转换后文件并确保只包含属于当前订单的文件
-    converted_files_objs = OrderService.get_order_conversions(order_id)
+    converted_files_objs = OrderService.get_order_conversions(order.id)
     
     # 将ConvertedFile对象列表转换为文件名列表
     converted_files = []
     if converted_files_objs:
         for cf in converted_files_objs:
             # 确保文件属于当前订单
-            if cf.order_id == order_id:
+            if cf.order_id == order.id:
                 # 取文件名而不是整个路径
                 filename = os.path.basename(cf.file_path)
                 converted_files.append(filename)
@@ -131,59 +137,44 @@ def order_detail(order_id):
     # 获取当前用户
     current_user = AdminService.get_current_user()
     
-    # 判断是否可以激活订单
-    can_activate = False
-    if current_user and order:
-        can_activate = (current_user.id == order.user_id or current_user.is_admin) and not order.is_active
-    
-    # 判断订单是否处于活跃状态
-    is_active_order = order.is_active if order else False
-    
     return render_template('orders/view.html', 
                            order=order,
                            uploaded_files=uploaded_files,
                            converted_files=converted_files,
                            filter_params=filter_params,
-                           current_user=current_user,
-                           can_activate=can_activate,
-                           is_active_order=is_active_order)
+                           current_user=current_user)
 
-@orders_bp.route('/<int:order_id>/activate', methods=['POST'])
+@orders_bp.route('/<order_number>/status', methods=['POST'])
 @login_required
-def activate_order(order_id):
-    """激活订单"""
-    success = OrderService.set_active_order(order_id)
-    
-    if success:
-        flash('已将订单设为活跃', 'success')
-    else:
-        flash('操作失败', 'error')
-    
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return jsonify(success=success)
-    
-    return redirect(url_for('orders.order_detail', order_id=order_id))
-
-@orders_bp.route('/<int:order_id>/status', methods=['POST'])
-@login_required
-def update_order_status(order_id):
+def update_order_status(order_number):
     """更新订单状态"""
+    # 尝试通过订单号获取订单
+    order = OrderService.get_order_by_number(order_number)
+    
+    # 兼容旧URL格式（如果order_number是数字ID）
+    if not order and order_number.isdigit():
+        order = OrderService.get_order(int(order_number))
+    
+    if not order:
+        flash('订单不存在', 'error')
+        return redirect(url_for('orders.order_list'))
+    
     new_status = request.form.get('status')
     if not new_status:
         flash('未提供状态', 'error')
-        return redirect(url_for('orders.order_detail', order_id=order_id))
+        return redirect(url_for('orders.order_detail', order_number=order.order_number))
     
-    order = OrderService.update_order_status(order_id, new_status)
+    updated_order = OrderService.update_order_status(order.id, new_status)
     
-    if order:
+    if updated_order:
         flash('订单状态已更新', 'success')
     else:
         flash('操作失败', 'error')
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return jsonify(success=bool(order))
+        return jsonify(success=bool(updated_order))
     
-    return redirect(url_for('orders.order_detail', order_id=order_id))
+    return redirect(url_for('orders.order_detail', order_number=order.order_number))
 
 @orders_bp.route('/merge', methods=['POST'])
 @login_required
@@ -202,18 +193,31 @@ def merge_orders():
     
     if new_order:
         flash(f'已成功合并为新订单: {new_order.order_number}', 'success')
-        return redirect(url_for('orders.order_detail', order_id=new_order.id))
+        return redirect(url_for('orders.order_detail', order_number=new_order.order_number))
     else:
         flash('订单合并失败', 'error')
         return redirect(url_for('orders.order_list'))
 
-@orders_bp.route('/<int:order_id>/note', methods=['POST'])
+@orders_bp.route('/<order_number>/note', methods=['POST'])
 @login_required
-def update_note(order_id):
+def update_note(order_number):
     """更新订单备注"""
+    # 尝试通过订单号获取订单
+    order = OrderService.get_order_by_number(order_number)
+    
+    # 兼容旧URL格式（如果order_number是数字ID）
+    if not order and order_number.isdigit():
+        order = OrderService.get_order(int(order_number))
+    
+    if not order:
+        flash('订单不存在', 'error')
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify(success=False, message='订单不存在')
+        return redirect(url_for('orders.order_list'))
+    
     note = request.form.get('note', '')
     
-    success = OrderService.update_order_note(order_id, note)
+    success = OrderService.update_order_note(order.id, note)
     
     if success:
         flash('订单备注已更新', 'success')
@@ -223,4 +227,4 @@ def update_note(order_id):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify(success=success)
     
-    return redirect(url_for('orders.order_detail', order_id=order_id))
+    return redirect(url_for('orders.order_detail', order_number=order.order_number))

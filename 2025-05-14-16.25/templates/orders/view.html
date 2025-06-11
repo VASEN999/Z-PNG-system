@@ -178,18 +178,6 @@
                 <a href="{{ url_for('orders.index', **filter_params) }}" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-arrow-left"></i> 返回订单列表
                 </a>
-                {% if can_activate %}
-                <form action="{{ url_for('orders.activate_order', order_number=order.order_number) }}" method="post" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    {% for key, value in filter_params.items() %}
-                    <input type="hidden" name="_{{ key }}" value="{{ value }}">
-                    {% endfor %}
-                    <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('确定要回滚到此订单吗？这将恢复该订单的所有文件并替换当前工作环境！');">
-                        <i class="bi bi-arrow-counterclockwise"></i> 回滚到此订单
-                    </button>
-                </form>
-                {% endif %}
-                
                 <!-- 只有管理员可见的转交按钮 -->
                 {% if current_user.is_admin %}
                 <button type="button" class="btn btn-sm btn-warning ms-1" id="transferOrderBtn">
@@ -203,7 +191,6 @@
     <!-- 主内容区域 - 左侧PNG池，右侧订单信息和文件上传 -->
     <div class="col-md-8">
         <!-- 材料分类区域 -->
-        {% if is_active_order %}
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">材料分类</h5>
@@ -290,15 +277,14 @@
                 {% endif %}
             </div>
         </div>
-        {% endif %}
         
         <!-- PNG池 -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">PNG文件池 ({{ converted_files|length }})</h5>
-                {% if is_active_order and converted_files %}
+                {% if converted_files %}
                 <div>
-                    <a href="{{ url_for('main.download_all') }}" class="btn btn-sm btn-outline-primary">
+                    <a href="{{ url_for('main.download_all', order_id=order.id) }}" class="btn btn-sm btn-outline-primary">
                         <i class="bi bi-download"></i> 下载全部
                     </a>
                 </div>
@@ -325,19 +311,14 @@
                     </div>
                     {% endfor %}
                 </div>
-                {% elif is_active_order %}
+                {% else %}
                 <div class="alert alert-info">
                     <p class="mb-0">还没有PNG文件。上传文件并点击处理按钮开始转换。</p>
-                </div>
-                {% else %}
-                <div class="alert alert-warning">
-                    <p class="mb-0">此订单未激活。请点击右上角的"回滚到此订单"按钮激活订单后查看文件。</p>
                 </div>
                 {% endif %}
             </div>
         </div>
         
-        {% if is_active_order %}
         <!-- 文件上传区域 -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -353,6 +334,7 @@
                     </form>
                     <form action="{{ url_for('main.clear_png_cache') }}" method="post" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="order_id" value="{{ order.id }}">
                         <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定要清空PNG池吗？这将删除所有转换后的PNG文件，但保留原始上传文件。您可以点击\'处理所有文件\'重新生成PNG文件。');">
                             <i class="bi bi-trash"></i> 清空PNG池
                         </button>
@@ -398,7 +380,6 @@
                 </div>
             </div>
         </div>
-        {% endif %}
     </div>
     
     <div class="col-md-4">
@@ -471,15 +452,11 @@
                                     {% else %}
                                     <span class="badge bg-secondary">{{ order.status_display }}</span>
                                     {% endif %}
-                                    
-                                    {% if order.is_active %}
-                                    <span class="badge bg-primary">活跃</span>
-                                    {% endif %}
                                 </div>
                                 
                                 <!-- 状态变更按钮组 -->
                                 <div>
-                                    <form action="{{ url_for('orders.update_order_status', order_id=order.id) }}" method="post" class="status-form w-100">
+                                    <form action="{{ url_for('orders.update_order_status', order_number=order.order_number) }}" method="post" class="status-form w-100">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         {% for key, value in filter_params.items() %}
                                         <input type="hidden" name="_{{ key }}" value="{{ value }}">
@@ -511,7 +488,7 @@
                             </div>
                             
                             <div id="noteEditForm" style="display: none;" class="mt-2">
-                                <form action="{{ url_for('orders.update_note', order_id=order.id) }}" method="post" id="noteForm">
+                                <form action="{{ url_for('orders.update_note', order_number=order.order_number) }}" method="post" id="noteForm">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     {% for key, value in filter_params.items() %}
                                     <input type="hidden" name="_{{ key }}" value="{{ value }}">

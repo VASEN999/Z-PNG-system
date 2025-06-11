@@ -15,7 +15,7 @@ from src.utils.convert_client import convert_client
 
 # 设置环境变量连接到正确的微服务端口
 # 从环境变量获取，如果环境变量没有设置，则使用默认值
-os.environ.setdefault('CONVERT_SVC_URL', 'http://localhost:8081/api')
+os.environ.setdefault('CONVERT_SVC_URL', 'http://localhost:8081')
 os.environ.setdefault('ARCHIVE_SVC_URL', 'http://localhost:8088/api/v1/archive')
 
 # 设置日志
@@ -51,8 +51,7 @@ def ensure_directories_exist():
         for dir_path in [
             config.UPLOAD_FOLDER,
             config.CONVERTED_FOLDER,
-            config.ARCHIVE_FOLDER,
-            os.path.join(os.path.dirname(__file__), 'flask_session')
+            config.ARCHIVE_FOLDER
         ]:
             os.makedirs(dir_path, exist_ok=True)
             logger.info(f"目录已创建或已存在: {dir_path}")
@@ -80,26 +79,62 @@ def find_available_port(start_port=8000):
 
 # 检查外部微服务是否可用
 def check_external_services():
-    if not convert_client.health_check():
-        logger.error("转换服务不可用，应用终止")
+    """检查所有依赖的外部服务是否可用，如果不可用则退出
+    
+    检查项目：
+    1. 转换服务（Go服务）- 必须可用
+    2. 归档服务（FastAPI服务）- 必须可用
+    """
+    logger.info("开始检查依赖的外部服务...")
+    
+    # 检查转换服务
+    logger.info(f"检查转换服务健康状态...")
+    convert_svc_url = os.environ.get('CONVERT_SVC_URL', 'http://localhost:8081')
+    convert_health_url = f"{convert_svc_url}/api/health"
+    
+    try:
+        resp = requests.get(convert_health_url, timeout=5)
+        if resp.status_code == 200:
+            logger.info("✓ 转换服务正常运行")
+        else:
+            logger.error(f"转换服务状态异常: HTTP {resp.status_code}, 响应: {resp.text}")
+            logger.error("系统依赖转换服务，无法继续运行")
+            print(f"错误: 转换服务不可用，请确保转换服务已启动并运行在 {convert_svc_url}")
+            sys.exit(1)
+    except requests.RequestException as e:
+        logger.error(f"无法连接到转换服务: {str(e)}")
+        logger.error("系统依赖转换服务，无法继续运行")
+        print(f"错误: 无法连接转换服务，请确保转换服务已启动并运行在 {convert_svc_url}")
         sys.exit(1)
-
+    
+    # 检查归档服务
+    logger.info(f"检查归档服务健康状态...")
     archive_url = os.environ.get('ARCHIVE_SVC_URL', 'http://localhost:8088/api/v1/archive')
     health_url = f"{archive_url.split('/archive')[0]}/health"
+    
     try:
         resp = requests.get(health_url, timeout=5)
-        if resp.status_code != 200:
-            raise RuntimeError(f"status {resp.status_code}")
-    except Exception as e:
-        logger.error(f"归档服务不可用: {e}")
+        if resp.status_code == 200:
+            logger.info("✓ 归档服务正常运行")
+        else:
+            logger.error(f"归档服务状态异常: HTTP {resp.status_code}, 响应: {resp.text}")
+            logger.error("系统依赖归档服务，无法继续运行")
+            print(f"错误: 归档服务不可用，请确保归档服务已启动并运行在 {health_url}")
+            sys.exit(1)
+    except requests.RequestException as e:
+        logger.error(f"无法连接到归档服务: {str(e)}")
+        logger.error("系统依赖归档服务，无法继续运行")
+        print(f"错误: 无法连接归档服务，请确保归档服务已启动并运行在 {health_url}")
         sys.exit(1)
+    
+    logger.info("所有依赖的外部服务检查通过")
 
 if __name__ == '__main__':
     try:
         # 确保目录存在
         ensure_directories_exist()
         
-        # 检查外部服务
+        # 首先检查外部服务
         check_external_services()
 
         # 获取数据库路径

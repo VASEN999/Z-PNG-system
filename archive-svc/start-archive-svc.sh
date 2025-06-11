@@ -96,7 +96,7 @@ fi
 # 安装依赖
 if [ "$INSTALL" = true ]; then
     echo -e "${YELLOW}安装依赖...${NC}"
-    pip install -r requirements.txt
+    python -m pip install -r requirements.txt
     if [ $? -ne 0 ]; then
         echo -e "${RED}依赖安装失败${NC}"
         exit 1

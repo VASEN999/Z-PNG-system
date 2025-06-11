@@ -63,5 +63,5 @@ ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or 'admin123'
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL') or 'admin@example.com'
 
 # 微服务配置
-CONVERT_SVC_URL = os.environ.get('CONVERT_SVC_URL', 'http://localhost:8080/api')
+CONVERT_SVC_URL = os.environ.get('CONVERT_SVC_URL', 'http://localhost:8081')
 ARCHIVE_SVC_URL = os.environ.get('ARCHIVE_SVC_URL', 'http://localhost:8088/api/v1/archive') 
