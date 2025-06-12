@@ -147,8 +147,42 @@ function check_requirements {
 # 创建日志目录
 mkdir -p logs
 
+# 检查并结束已运行的服务进程
+function stop_existing_services {
+    echo -e "${YELLOW}检查并停止已运行的服务进程...${NC}"
+    
+    # 检查并结束转换服务
+    local CONVERT_PIDS=$(lsof -t -i:$CONVERT_SVC_PORT 2>/dev/null)
+    if [ -n "$CONVERT_PIDS" ]; then
+        echo -e "${YELLOW}发现已运行的转换服务进程: $CONVERT_PIDS, 正在停止...${NC}"
+        kill -9 $CONVERT_PIDS 2>/dev/null
+        sleep 1
+    fi
+    
+    # 检查并结束归档服务
+    local ARCHIVE_PIDS=$(lsof -t -i:$ARCHIVE_SVC_PORT 2>/dev/null)
+    if [ -n "$ARCHIVE_PIDS" ]; then
+        echo -e "${YELLOW}发现已运行的归档服务进程: $ARCHIVE_PIDS, 正在停止...${NC}"
+        kill -9 $ARCHIVE_PIDS 2>/dev/null
+        sleep 1
+    fi
+    
+    # 检查并结束主应用
+    local MAIN_PIDS=$(lsof -t -i:$MAIN_APP_PORT 2>/dev/null)
+    if [ -n "$MAIN_PIDS" ]; then
+        echo -e "${YELLOW}发现已运行的主应用进程: $MAIN_PIDS, 正在停止...${NC}"
+        kill -9 $MAIN_PIDS 2>/dev/null
+        sleep 1
+    fi
+    
+    echo -e "${GREEN}所有已运行的服务进程已停止${NC}"
+}
+
 # 检查必要条件
 check_requirements
+
+# 停止已运行的服务进程
+stop_existing_services
 
 # 设置环境变量
 export PORT=$MAIN_APP_PORT
@@ -163,6 +197,12 @@ echo -e "${YELLOW}归档服务端口: $ARCHIVE_SVC_PORT${NC}"
 # 启动转换服务
 echo -e "${YELLOW}启动转换服务...${NC}"
 cd convert-svc
+
+# 确保存储目录存在并有正确的权限
+echo -e "${YELLOW}确保转换服务存储目录存在...${NC}"
+mkdir -p storage/uploads storage/converted storage/archive
+chmod -R 755 storage
+
 # 直接启动二进制文件，使用默认配置，不提供端口参数
 nohup ./convert-svc > ../logs/convert-svc.log 2>&1 &
 CONVERT_PID=$!
@@ -171,31 +211,10 @@ echo -e "${GREEN}转换服务已启动，PID: $CONVERT_PID${NC}"
 
 # 启动归档服务
 echo -e "${YELLOW}启动归档服务...${NC}"
-cd archive-svc
 
-# 创建虚拟环境并安装依赖
-if [ ! -d "venv" ]; then
-    echo -e "${YELLOW}创建归档服务虚拟环境...${NC}"
-    python3 -m venv venv
-fi
-
-# 激活虚拟环境
-source venv/bin/activate
-
-# 在虚拟环境中安装依赖
-echo -e "${YELLOW}在虚拟环境中安装依赖...${NC}"
-pip install -r requirements.txt
-# 确保安装关键依赖
-pip install --no-cache-dir aiosqlite uvicorn
-
-# 使用虚拟环境中的Python启动服务
-nohup venv/bin/python run.py --host 0.0.0.0 --port $ARCHIVE_SVC_PORT > ../logs/archive-svc.log 2>&1 &
+# 使用新创建的启动脚本
+nohup ./archive-svc/start-archive-svc.sh --port $ARCHIVE_SVC_PORT > logs/archive-svc.log 2>&1 &
 ARCHIVE_PID=$!
-
-# 退出虚拟环境
-deactivate
-
-cd ..
 echo -e "${GREEN}归档服务已启动，PID: $ARCHIVE_PID${NC}"
 
 # 等待几秒以确保服务启动完成
@@ -258,15 +277,19 @@ echo -e "  ARCHIVE_SVC_URL=$ARCHIVE_SVC_URL"
 # 使用PYTHONPATH确保src模块能被导入
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
-# 只有当转换服务和归档服务都就绪时才启动主应用
+# 仅当转换服务和归档服务都就绪时才启动主应用
 if [ "$CONVERT_HEALTH_CHECK" = true ] && [ "$ARCHIVE_HEALTH_CHECK" = true ]; then
     # 在后台运行主应用
     nohup python run.py > ../logs/main-app.log 2>&1 &
     MAIN_PID=$!
     echo -e "${GREEN}主应用已启动，PID: $MAIN_PID${NC}"
     # 检查主应用是否运行
-    sleep 2
-    ps -p $MAIN_PID > /dev/null || { echo -e "${RED}主应用进程未启动成功!${NC}"; }
+    sleep 5
+    if ps -p $MAIN_PID > /dev/null; then
+        echo -e "${GREEN}主应用已成功启动${NC}"
+    else
+        echo -e "${RED}主应用进程未启动成功!${NC}"
+    fi
 else
     echo -e "${RED}依赖服务未就绪，主应用未启动${NC}"
     MAIN_PID=""
@@ -276,9 +299,9 @@ cd ..
 # 仅当所有服务健康时才显示成功信息
 if [ "$CONVERT_HEALTH_CHECK" = true ] && [ "$ARCHIVE_HEALTH_CHECK" = true ] && [ -n "$MAIN_PID" ]; then
     echo -e "${GREEN}所有服务已成功启动!${NC}"
-    echo -e "主应用: http://localhost:$MAIN_APP_PORT"
-    echo -e "转换服务: http://localhost:$CONVERT_SVC_PORT"
-    echo -e "归档服务: http://localhost:$ARCHIVE_SVC_PORT" 
+echo -e "主应用: http://localhost:$MAIN_APP_PORT"
+echo -e "转换服务: http://localhost:$CONVERT_SVC_PORT"
+echo -e "归档服务: http://localhost:$ARCHIVE_SVC_PORT"
 else
     echo -e "${RED}某些服务未正确启动，请检查日志${NC}"
 fi

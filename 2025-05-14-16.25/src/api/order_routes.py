@@ -127,6 +127,17 @@ def order_detail(order_number):
                 # 取文件名而不是整个路径
                 filename = os.path.basename(cf.file_path)
                 converted_files.append(filename)
+        
+        # 按文件名排序
+        converted_files.sort(key=lambda x: (
+            # 首先按前缀排序（01_申请表、02_证件照等）
+            x.split('_')[0] if '_' in x and x.split('_')[0].isdigit() else '99',
+            # 然后按类别排序
+            x.split('_')[1] if '_' in x and len(x.split('_')) > 1 else '',
+            # 最后按序号排序
+            int(x.split('_')[2].split('.')[0]) if '_' in x and len(x.split('_')) > 2 and 
+            x.split('_')[2].split('.')[0].isdigit() else 9999
+        ))
     
     # 添加筛选参数
     filter_params = {}

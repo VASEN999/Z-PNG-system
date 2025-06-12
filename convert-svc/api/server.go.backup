@@ -1,0 +1,439 @@
+package api
+
+import (
+	"context"
+	"convert-svc/config"
+	"convert-svc/pkg/converter"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+)
+
+// Server HTTP服务器结构体
+type Server struct {
+	router     *gin.Engine
+	config     *config.Config
+	httpServer *http.Server
+}
+
+// NewServer 创建一个新的服务器实例
+func NewServer(cfg *config.Config) *Server {
+	// 设置Gin模式
+	if cfg.Server.Mode == "release" {
+		gin.SetMode(gin.ReleaseMode)
+	} else {
+		gin.SetMode(gin.DebugMode)
+	}
+
+	// 创建Gin路由器
+	r := gin.Default()
+
+	// 创建服务器
+	server := &Server{
+		router: r,
+		config: cfg,
+	}
+
+	// 确保存储目录存在
+	os.MkdirAll(cfg.Storage.UploadDir, 0755)
+	os.MkdirAll(cfg.Storage.ConvertedDir, 0755)
+	os.MkdirAll(cfg.Storage.ArchiveDir, 0755)
+
+	// 设置路由
+	server.setupRoutes()
+
+	return server
+}
+
+// 设置API路由
+func (s *Server) setupRoutes() {
+	// API群组
+	api := s.router.Group("/api")
+	{
+		// 健康检查
+		api.GET("/health", s.healthCheck)
+
+		// 文件转换API
+		api.POST("/convert", s.convertFile)
+
+		// 批量转换API
+		api.POST("/convert-batch", s.convertBatch)
+	}
+
+	// 添加根路径健康检查，与启动脚本兼容
+	s.router.GET("/health", s.healthCheck)
+
+	// 静态文件服务 - 确保使用正确的路径
+	s.router.Static("/files", s.config.Storage.ConvertedDir)
+
+	// 添加文件信息API
+	s.router.GET("/file-info/:filename", s.getFileInfo)
+}
+
+// Start 启动HTTP服务器
+func (s *Server) Start() error {
+	// 创建HTTP服务器
+	s.httpServer = &http.Server{
+		Addr:    s.config.Server.Address,
+		Handler: s.router,
+	}
+
+	// 启动服务器
+	return s.httpServer.ListenAndServe()
+}
+
+// Shutdown 关闭HTTP服务器
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s.httpServer != nil {
+		return s.httpServer.Shutdown(ctx)
+	}
+	return nil
+}
+
+// 健康检查处理程序
+func (s *Server) healthCheck(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"service": "convert-svc",
+	})
+}
+
+// FileConvertRequest 文件转换请求结构体
+type FileConvertRequest struct {
+	FilePath  string `json:"file_path" binding:"required"` // 文件路径
+	OutputDir string `json:"output_dir,omitempty"`         // 可选的输出目录
+	DPI       int    `json:"dpi,omitempty"`                // 可选的DPI设置
+	OrderId   string `json:"order_id,omitempty"`           // 可选的订单ID，用于按订单组织文件
+}
+
+// FileConvertResponse 文件转换响应结构体
+type FileConvertResponse struct {
+	Success bool     `json:"success"`
+	Message string   `json:"message"`
+	Files   []string `json:"files,omitempty"`
+	Error   string   `json:"error,omitempty"`
+}
+
+// convertFile 单个文件转换处理程序
+func (s *Server) convertFile(c *gin.Context) {
+	var req FileConvertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, FileConvertResponse{
+			Success: false,
+			Message: "请求格式错误",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// 打印请求参数用于调试
+	fmt.Printf("收到转换请求 - 文件路径: %s, 输出目录: %s, DPI: %d, 订单ID: %s\n",
+		req.FilePath, req.OutputDir, req.DPI, req.OrderId)
+
+	// 检查文件是否存在
+	if _, err := os.Stat(req.FilePath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, FileConvertResponse{
+			Success: false,
+			Message: "文件不存在",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// 确定输出目录
+	outputDir := req.OutputDir
+	if outputDir == "" {
+		outputDir = s.config.Storage.ConvertedDir
+
+		// 如果提供了订单ID，则在converted目录下创建以订单ID命名的子目录
+		if req.OrderId != "" {
+			outputDir = filepath.Join(outputDir, req.OrderId)
+			// 确保目录存在
+			if err := os.MkdirAll(outputDir, 0755); err != nil {
+				c.JSON(http.StatusInternalServerError, FileConvertResponse{
+					Success: false,
+					Message: "创建订单目录失败",
+					Error:   err.Error(),
+				})
+				return
+			}
+		}
+	}
+
+	// 确定DPI
+	dpi := req.DPI
+	if dpi == 0 {
+		dpi = s.config.Conversion.DPI
+	}
+
+	// 根据文件扩展名进行转换
+	ext := strings.ToLower(filepath.Ext(req.FilePath))
+	var convertedFiles []string
+	var err error
+
+	switch {
+	case ext == ".pdf":
+		convertedFiles, err = converter.ConvertPDFToPNG(req.FilePath, outputDir, dpi)
+	case ext == ".docx" || ext == ".doc":
+		convertedFiles, err = converter.ConvertDocxToPNG(req.FilePath, outputDir, dpi)
+	case ext == ".pptx" || ext == ".ppt":
+		convertedFiles, err = converter.ConvertPptxToPNG(req.FilePath, outputDir, dpi)
+	case ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".bmp":
+		file, err := converter.ConvertImageToPNG(req.FilePath, outputDir)
+		if err == nil {
+			convertedFiles = []string{file}
+		}
+	default:
+		c.JSON(http.StatusBadRequest, FileConvertResponse{
+			Success: false,
+			Message: "不支持的文件类型",
+			Error:   fmt.Sprintf("不支持的文件扩展名: %s", ext),
+		})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, FileConvertResponse{
+			Success: false,
+			Message: "文件转换失败",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// 如果配置指定删除原始文件
+	if s.config.Conversion.DeleteOriginal {
+		os.Remove(req.FilePath)
+	}
+
+	c.JSON(http.StatusOK, FileConvertResponse{
+		Success: true,
+		Message: "文件转换成功",
+		Files:   convertedFiles,
+	})
+}
+
+// BatchConvertRequest 批量文件转换请求
+type BatchConvertRequest struct {
+	Files   []FileConvertRequest `json:"files" binding:"required"`
+	OrderId string               `json:"order_id,omitempty"` // 可选的订单ID，用于按订单组织文件
+}
+
+// BatchConvertResponse 批量文件转换响应
+type BatchConvertResponse struct {
+	Success  bool                   `json:"success"`
+	Message  string                 `json:"message"`
+	Results  map[string]interface{} `json:"results"`
+	ErrorMsg string                 `json:"error,omitempty"`
+}
+
+// convertBatch 批量文件转换处理程序
+func (s *Server) convertBatch(c *gin.Context) {
+	var req BatchConvertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, BatchConvertResponse{
+			Success:  false,
+			Message:  "请求格式错误",
+			ErrorMsg: err.Error(),
+		})
+		return
+	}
+
+	results := make(map[string]interface{})
+	anyErrors := false
+
+	// 为批处理生成一个唯一ID，用于分组文件
+	batchID := uuid.New().String()
+
+	// 确定输出根目录
+	var outputRootDir string
+	if req.OrderId != "" {
+		// 如果提供了订单ID，则使用它创建子目录
+		outputRootDir = filepath.Join(s.config.Storage.ConvertedDir, req.OrderId)
+	} else {
+		// 否则使用批处理ID作为默认目录名
+		outputRootDir = filepath.Join(s.config.Storage.ConvertedDir, batchID)
+	}
+
+	// 确保目录存在
+	os.MkdirAll(outputRootDir, 0755)
+
+	for _, fileReq := range req.Files {
+		// 设置默认输出目录
+		if fileReq.OutputDir == "" {
+			fileReq.OutputDir = outputRootDir
+		}
+
+		// 如果文件请求没有订单ID但批请求有，则继承批请求的订单ID
+		if fileReq.OrderId == "" {
+			fileReq.OrderId = req.OrderId
+		}
+
+		// 设置默认DPI
+		if fileReq.DPI == 0 {
+			fileReq.DPI = s.config.Conversion.DPI
+		}
+
+		// 处理单个文件
+		var convertedFiles []string
+		var err error
+
+		// 检查文件是否存在
+		if _, err := os.Stat(fileReq.FilePath); os.IsNotExist(err) {
+			results[fileReq.FilePath] = map[string]interface{}{
+				"success": false,
+				"error":   "文件不存在",
+			}
+			anyErrors = true
+			continue
+		}
+
+		// 根据文件扩展名进行转换
+		ext := strings.ToLower(filepath.Ext(fileReq.FilePath))
+		switch {
+		case ext == ".pdf":
+			convertedFiles, err = converter.ConvertPDFToPNG(fileReq.FilePath, fileReq.OutputDir, fileReq.DPI)
+		case ext == ".docx" || ext == ".doc":
+			convertedFiles, err = converter.ConvertDocxToPNG(fileReq.FilePath, fileReq.OutputDir, fileReq.DPI)
+		case ext == ".pptx" || ext == ".ppt":
+			convertedFiles, err = converter.ConvertPptxToPNG(fileReq.FilePath, fileReq.OutputDir, fileReq.DPI)
+		case ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".bmp":
+			file, err := converter.ConvertImageToPNG(fileReq.FilePath, fileReq.OutputDir)
+			if err == nil {
+				convertedFiles = []string{file}
+			}
+		default:
+			results[fileReq.FilePath] = map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("不支持的文件扩展名: %s", ext),
+			}
+			anyErrors = true
+			continue
+		}
+
+		if err != nil {
+			results[fileReq.FilePath] = map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+			}
+			anyErrors = true
+		} else {
+			results[fileReq.FilePath] = map[string]interface{}{
+				"success": true,
+				"files":   convertedFiles,
+			}
+
+			// 如果配置指定删除原始文件
+			if s.config.Conversion.DeleteOriginal {
+				os.Remove(fileReq.FilePath)
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, BatchConvertResponse{
+		Success: !anyErrors,
+		Message: "批量转换完成",
+		Results: results,
+	})
+}
+
+// FileInfoResponse 文件信息响应结构体
+type FileInfoResponse struct {
+	Success  bool   `json:"success"`
+	Filename string `json:"filename"`
+	URL      string `json:"url"`
+	MimeType string `json:"mime_type"`
+	Size     int64  `json:"size"`
+	Error    string `json:"error,omitempty"`
+}
+
+// getFileInfo 获取文件信息处理程序
+func (s *Server) getFileInfo(c *gin.Context) {
+	filename := c.Param("filename")
+
+	// 拼接完整文件路径
+	filePath := filepath.Join(s.config.Storage.ConvertedDir, filename)
+
+	// 检查文件是否存在
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// 如果在根目录没找到，尝试在子目录中查找
+			found := false
+			err := filepath.Walk(s.config.Storage.ConvertedDir, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				if !info.IsDir() && info.Name() == filename {
+					filePath = path
+					fileInfo = info
+					found = true
+					return filepath.SkipAll
+				}
+				return nil
+			})
+
+			if err != nil || !found {
+				c.JSON(http.StatusNotFound, FileInfoResponse{
+					Success: false,
+					Error:   "文件不存在",
+				})
+				return
+			}
+		} else {
+			c.JSON(http.StatusInternalServerError, FileInfoResponse{
+				Success: false,
+				Error:   err.Error(),
+			})
+			return
+		}
+	}
+
+	// 判断是否是常规文件
+	if !fileInfo.Mode().IsRegular() {
+		c.JSON(http.StatusBadRequest, FileInfoResponse{
+			Success: false,
+			Error:   "不是常规文件",
+		})
+		return
+	}
+
+	// 确定MIME类型
+	mimeType := "image/png" // 默认类型
+
+	// 获取文件大小
+	fileSize := fileInfo.Size()
+
+	// 构建文件URL
+	serverAddress := s.config.Server.Address
+	if serverAddress[0] == ':' {
+		// 如果地址只包含端口号，添加默认主机名
+		serverAddress = "http://localhost" + serverAddress
+	} else if !strings.HasPrefix(serverAddress, "http") {
+		// 如果没有协议前缀，添加http://
+		serverAddress = "http://" + serverAddress
+	}
+
+	// 获取相对于转换目录的路径
+	relPath, err := filepath.Rel(s.config.Storage.ConvertedDir, filePath)
+	if err != nil {
+		relPath = filename
+	}
+
+	// 构建URL
+	fileURL := fmt.Sprintf("%s/files/%s", serverAddress, relPath)
+
+	// 返回文件信息
+	c.JSON(http.StatusOK, FileInfoResponse{
+		Success:  true,
+		Filename: filename,
+		URL:      fileURL,
+		MimeType: mimeType,
+		Size:     fileSize,
+	})
+}
