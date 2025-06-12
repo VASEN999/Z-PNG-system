@@ -106,7 +106,7 @@ def check_external_services():
         logger.error("系统依赖转换服务，无法继续运行")
         print(f"错误: 无法连接转换服务，请确保转换服务已启动并运行在 {convert_svc_url}")
         sys.exit(1)
-    
+
     # 检查归档服务
     logger.info(f"检查归档服务健康状态...")
     archive_url = os.environ.get('ARCHIVE_SVC_URL', 'http://localhost:8088/api/v1/archive')

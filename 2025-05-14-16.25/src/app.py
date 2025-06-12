@@ -150,7 +150,7 @@ def register_error_handlers(app):
     
     @app.errorhandler(403)
     def forbidden(e):
-        return render_template('error.html', error_code=403, error_message='禁止访问'), 403
+        return render_template('error.html', error_code=403, error_message='禁止访问'), 403 
 
 def register_filters(app):
     """注册Jinja2自定义过滤器

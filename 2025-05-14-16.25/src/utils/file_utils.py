@@ -6,6 +6,34 @@ import fitz  # PyMuPDF
 import docx
 from pptx import Presentation
 
+# 添加缺失的函数
+def process_uploaded_file(file, upload_dir):
+    """处理上传的文件
+    
+    Args:
+        file: 上传的文件对象
+        upload_dir: 上传目录
+        
+    Returns:
+        保存后的文件路径
+    """
+    filename = file.filename
+    filepath = os.path.join(upload_dir, filename)
+    file.save(filepath)
+    return filepath
+
+def extract_fonts(file_path):
+    """提取文件中的字体
+    
+    Args:
+        file_path: 文件路径
+        
+    Returns:
+        字体列表
+    """
+    # 仅作为占位符，实际未实现
+    return []
+
 # 注意: 以下本地转换函数已弃用。系统现在仅依赖于Go转换服务。
 # 这些函数保留在代码中仅供参考，如果Go服务无法使用，系统将引发错误而不是回退到本地转换。
 

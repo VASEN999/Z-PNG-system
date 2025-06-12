@@ -44,7 +44,7 @@ func ConvertOfficeToPDF(officePath, outputDir string) (string, error) {
 }
 
 // ConvertDocxToPNG 将Word文档转换为PNG图片
-func ConvertDocxToPNG(docxPath, outputDir string, dpi int) ([]string, error) {
+func ConvertDocxToPNG(docxPath, outputDir string, dpi int, sourceID, parentID string) ([]string, error) {
 	// 先转换为PDF
 	pdfPath, err := ConvertOfficeToPDF(docxPath, outputDir)
 	if err != nil {
@@ -52,7 +52,7 @@ func ConvertDocxToPNG(docxPath, outputDir string, dpi int) ([]string, error) {
 	}
 
 	// 然后将PDF转换为PNG
-	pngFiles, err := ConvertPDFToPNG(pdfPath, outputDir, dpi)
+	pngFiles, err := ConvertPDFToPNG(pdfPath, outputDir, dpi, sourceID, parentID)
 	if err != nil {
 		return nil, fmt.Errorf("PDF转PNG失败: %w", err)
 	}
@@ -64,7 +64,7 @@ func ConvertDocxToPNG(docxPath, outputDir string, dpi int) ([]string, error) {
 }
 
 // ConvertPptxToPNG 将PPT文档转换为PNG图片
-func ConvertPptxToPNG(pptxPath, outputDir string, dpi int) ([]string, error) {
+func ConvertPptxToPNG(pptxPath, outputDir string, dpi int, sourceID, parentID string) ([]string, error) {
 	// 先转换为PDF
 	pdfPath, err := ConvertOfficeToPDF(pptxPath, outputDir)
 	if err != nil {
@@ -72,7 +72,7 @@ func ConvertPptxToPNG(pptxPath, outputDir string, dpi int) ([]string, error) {
 	}
 
 	// 然后将PDF转换为PNG
-	pngFiles, err := ConvertPDFToPNG(pdfPath, outputDir, dpi)
+	pngFiles, err := ConvertPDFToPNG(pdfPath, outputDir, dpi, sourceID, parentID)
 	if err != nil {
 		return nil, fmt.Errorf("PDF转PNG失败: %w", err)
 	}
@@ -81,4 +81,4 @@ func ConvertPptxToPNG(pptxPath, outputDir string, dpi int) ([]string, error) {
 	// os.Remove(pdfPath)
 
 	return pngFiles, nil
-} 
+}
